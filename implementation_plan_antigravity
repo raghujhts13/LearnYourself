@@ -1,0 +1,177 @@
+# Add Puter.js Seedream Provider (Free, No API Key)
+
+## Background
+
+The current "Seedream" image provider in OpenMAIC calls the **ByteDance Ark API** (`ark.cn-beijing.volces.com`) using the server-side route `/api/generate/image`, which requires a paid Volcengine API key.
+
+**Puter.js** offers a completely **free, unlimited**, client-side API for the same Seedream models (`ByteDance-Seed/Seedream-4.0` and `ByteDance-Seed/Seedream-3.0`) via `puter.ai.txt2img()`. No API keys or backend required — it loads a script tag and all generation runs in the browser under a "User-Pays" model (each Puter user has their own quota).
+
+This plan adds a new `puter-seedream` provider that runs 100% on the client side via the Puter.js SDK, bypassing the existing server-side image generation pipeline entirely.
+
+---
+
+## How Puter.js Works
+
+```html
+<!-- Just add this script tag — no config, no API keys -->
+<script src="https://js.puter.com/v2/"></script>
+```
+
+```js
+// Generate an image (returns an <img> HTMLElement)
+puter.ai.txt2img(
+  "A futuristic cityscape",
+  {
+    model: "ByteDance-Seed/Seedream-4.0",
+    provider: "together-ai",
+    disable_safety_checker: true,
+    width: 960,
+    height: 960
+  }
+).then(imageElement => {
+  // imageElement is a ready <img> with .src set
+  document.body.appendChild(imageElement);
+});
+```
+
+The returned `<img>` element has its `.src` pointing to a blob/object URL of the generated image.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Client-side only**: Puter.js runs entirely in the browser. There's no server route involved — the image is generated on the client. This means:
+> - No API key is needed — users use their own Puter account quota (free tier included).
+> - It cannot be used server-side (e.g., in `classroom-generation.ts`), and that's fine because the existing classroom image generation already happens client-side via `media-orchestrator.ts`.
+
+> [!WARNING]
+> **Puter.js login requirement**: Puter.js may prompt the user to log in to puter.com on first use. This is expected behavior for the "User-Pays" model. We should document this in the UI.
+
+> [!NOTE]
+> The existing `seedream` provider (Volcengine/Ark API) is **NOT removed**. We add `puter-seedream` as a new parallel option so users can choose either.
+
+---
+
+## Proposed Changes
+
+### 1. Type System
+
+#### [MODIFY] [types.ts](file:///d:/vibeCodeproject/openMAIC/OpenMAIC/lib/media/types.ts)
+- Add `'puter-seedream'` to the `ImageProviderId` union type.
+
+---
+
+### 2. New Adapter
+
+#### [NEW] [puter-seedream-adapter.ts](file:///d:/vibeCodeproject/openMAIC/OpenMAIC/lib/media/adapters/puter-seedream-adapter.ts)
+- Declares `window.puter` TypeScript type (minimal — just `ai.txt2img`).
+- Dynamically injects the Puter.js `<script>` tag if not already loaded.
+- Exports `generateWithPuterSeedream(config, options)`:
+  - Calls `puter.ai.txt2img(prompt, { model, provider: 'together-ai', disable_safety_checker: true, width, height })`.
+  - Extracts the `src` from the returned `<img>` element as the image URL.
+- Exports `testPuterSeedreamConnectivity()`:
+  - Returns `{ success: true, message: 'Puter.js Seedream (no API key required)' }` since it's always "configured".
+
+---
+
+### 3. Provider Registry
+
+#### [MODIFY] [image-providers.ts](file:///d:/vibeCodeproject/openMAIC/OpenMAIC/lib/media/image-providers.ts)
+- Import new adapter (`generateWithPuterSeedream`, `testPuterSeedreamConnectivity`).
+- Add `'puter-seedream'` entry to `IMAGE_PROVIDERS`:
+  ```ts
+  'puter-seedream': {
+    id: 'puter-seedream',
+    name: 'Seedream via Puter (Free)',
+    requiresApiKey: false,
+    models: [
+      { id: 'ByteDance-Seed/Seedream-4.0', name: 'Seedream 4.0' },
+      { id: 'ByteDance-Seed/Seedream-3.0', name: 'Seedream 3.0' },
+    ],
+    supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
+  }
+  ```
+- Add `case 'puter-seedream'` in both `generateImage()` and `testImageConnectivity()` switch statements.
+
+---
+
+### 4. API Route: Bypass for Puter Seedream
+
+#### [MODIFY] [route.ts (generate/image)](file:///d:/vibeCodeproject/openMAIC/OpenMAIC/app/api/generate/image/route.ts)
+The current route requires an API key before even calling the adapter. Since `puter-seedream` has `requiresApiKey: false`, we need to skip the key check for it.
+
+- Add a skip condition: if `providerId === 'puter-seedream'`, skip the API key validation and return a special response indicating the client should handle this provider directly.
+
+> [!IMPORTANT]
+> **Alternative approach (preferred)**: Since Puter.js is purely client-side, the `callImageApi` in `media-orchestrator.ts` should be modified to detect `puter-seedream` and call the adapter **directly in the browser** (skipping the server route entirely). This avoids needing to change the server route logic and keeps the architecture clean.
+
+The preferred approach is to modify `media-orchestrator.ts` to short-circuit for `puter-seedream` and call the adapter directly — no server round-trip needed.
+
+---
+
+### 5. Media Orchestrator (Client-side Short-circuit)
+
+#### [MODIFY] [media-orchestrator.ts](file:///d:/vibeCodeproject/openMAIC/OpenMAIC/lib/media/media-orchestrator.ts)
+- In `callImageApi()`, detect if `settings.imageProviderId === 'puter-seedream'`.
+- If so, dynamically import the puter adapter and call `generateWithPuterSeedream()` directly.
+- Skip the `/api/generate/image` server call entirely.
+- Return `{ url: result.url || result.base64DataUrl }` in same shape as current return.
+
+---
+
+### 6. Settings Store
+
+#### [MODIFY] [settings.ts](file:///d:/vibeCodeproject/openMAIC/OpenMAIC/lib/store/settings.ts)
+- Add `'puter-seedream'` to `getDefaultImageConfig()`:
+  ```ts
+  'puter-seedream': { apiKey: '', baseUrl: '', enabled: true }
+  ```
+- Default `imageProviderId` can remain `'seedream'` (no breaking change).
+
+---
+
+### 7. Settings UI
+
+#### [MODIFY] [index.tsx (settings)](file:///d:/vibeCodeproject/openMAIC/OpenMAIC/components/settings/index.tsx)
+- Add `'puter-seedream'` to `IMAGE_PROVIDER_NAMES` and `IMAGE_PROVIDER_ICONS` maps.
+- Icon: use `/logos/doubao.svg` (same as existing Seedream, since it's the same model family) or a Puter logo.
+
+#### [MODIFY] [image-settings.tsx](file:///d:/vibeCodeproject/openMAIC/OpenMAIC/components/settings/image-settings.tsx)
+- When selected provider is `'puter-seedream'`:
+  - Hide the API Key field (not needed).
+  - Show an info notice: "Uses Puter.js — free, no API key required. Puter.com account needed on first use."
+  - The test connection button still works (calls `testPuterSeedreamConnectivity()`).
+
+---
+
+### 8. Generation Toolbar (Enable without API key)
+
+#### [MODIFY] [generation-toolbar.tsx](file:///d:/vibeCodeproject/openMAIC/OpenMAIC/components/generation/generation-toolbar.tsx)
+- The current code checks `!webSearchProvider.requiresApiKey || !!webSearchConfig?.apiKey || isServerConfigured`.
+- Similarly for images: ensure `puter-seedream` passes the "is configured?" check since `requiresApiKey: false`.
+- This should already work since we set `requiresApiKey: false` in the provider config.
+
+#### [MODIFY] [settings.ts (store)](file:///d:/vibeCodeproject/openMAIC/OpenMAIC/lib/store/settings.ts)
+- In `setImageGenerationEnabled`, the current guard `!hasUsable` checks for `isServerConfigured || apiKey`. Since `puter-seedream` has neither, we need to also allow providers where `requiresApiKey === false`. Update the guard to: `c.isServerConfigured || c.apiKey || IMAGE_PROVIDERS[pid]?.requiresApiKey === false`.
+
+---
+
+### 9. Next.js Script Loading
+
+#### [MODIFY] [layout.tsx or _document](file:///d:/vibeCodeproject/openMAIC/OpenMAIC/app)
+- The Puter.js SDK is loaded dynamically inside the adapter (via `document.createElement('script')`), so **no changes to `_document` or `layout.tsx` are needed**. The adapter self-injects the script on first use.
+
+---
+
+## Verification Plan
+
+### Manual Testing
+1. Open Settings → Image → select "Seedream via Puter (Free)".
+2. Notice: no API key field shown, info notice visible.
+3. Enable Image Generation toggle in media popover.
+4. Start a generation and confirm an image is generated via Puter.js.
+
+### Automated Code Checks
+- Ensure TypeScript compiles: `pnpm tsc --noEmit`
+- Ensure tests still pass: `pnpm vitest run`
