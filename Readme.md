@@ -95,7 +95,12 @@ You can also dynamically shift TTS, ASR, and Image generation settings through t
 ## Future Scope
 
 *(Placeholder for future scope)*
-
+- Find a way to render and edit user PPT (instead of AI generation)
+- Classrooms and classes are web cached (should add cloud sync or some persist mechanism)
+  - [x] Vercel deploy classes 
+  - [ ] Deploy classrooms
+  - [ ] check if uploaded files during class generation is getting saved under materials/ assets inside classroom folders
+  - [ ] update this readme file to include all the functionalities and step-by-step explanation of whats happening under the hood (or add a medium article and link it here)
 ---
 
 ## Project Documentation Archive
