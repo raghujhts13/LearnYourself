@@ -7,6 +7,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import yaml from 'js-yaml';
 import { createLogger } from '@/lib/logger';
 
@@ -21,6 +22,40 @@ interface ServerProviderEntry {
   baseUrl?: string;
   models?: string[];
   proxy?: string;
+}
+
+function parseOllamaListTextOutput(output: string): string[] {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const models: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (i === 0 && /^NAME\s+/i.test(line)) continue;
+    const firstToken = line.split(/\s+/)[0]?.trim();
+    if (!firstToken || /^name$/i.test(firstToken)) continue;
+    models.push(firstToken);
+  }
+
+  return Array.from(new Set(models));
+}
+
+function getOllamaModelsFromCli(): string[] {
+  try {
+    // `ollama list` table output is stable across versions and easy to parse.
+    const output = execFileSync('ollama', ['list'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 4000,
+    });
+    return parseOllamaListTextOutput(output);
+  } catch (error) {
+    log.debug('[ServerProviderConfig] `ollama list` unavailable or failed', error);
+    return [];
+  }
 }
 
 interface ServerConfig {
@@ -237,6 +272,19 @@ export function getServerProviders(): Record<string, { models?: string[]; baseUr
     if (entry.models && entry.models.length > 0) result[id].models = entry.models;
     if (entry.baseUrl) result[id].baseUrl = entry.baseUrl;
   }
+
+  // Human-requested behavior: show real local Ollama models (`ollama list`) in UI.
+  // This overrides static/env model allow-lists when CLI data is available.
+  if (cfg.providers.ollama) {
+    const cliModels = getOllamaModelsFromCli();
+    if (cliModels.length > 0) {
+      result.ollama = {
+        ...(result.ollama || {}),
+        models: cliModels,
+      };
+    }
+  }
+
   return result;
 }
 

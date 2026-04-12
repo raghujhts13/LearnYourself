@@ -68,6 +68,8 @@ export interface UserRequirements {
   userNickname?: string; // Student nickname for personalization
   userBio?: string; // Student background for personalization
   webSearch?: boolean; // Enable web search for richer context
+  includeQuizzes?: boolean; // Whether to include quiz scenes (default: false)
+  generationMode?: 'ai' | 'from-slides'; // AI generation or use uploaded slides (default: 'ai')
 }
 
 /**

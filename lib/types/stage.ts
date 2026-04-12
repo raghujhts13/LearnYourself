@@ -23,6 +23,14 @@ export interface Stage {
   style?: string;
   // Whiteboard data
   whiteboard?: Whiteboard[];
+  // Classroom relationship
+  classroomId?: string;
+  sessionDate?: number;
+  // Source file metadata
+  sourceFileKey?: string;
+  sourceFileName?: string;
+  sourceFileType?: string;
+  generationMode?: 'ai' | 'from-slides';
 }
 
 /**

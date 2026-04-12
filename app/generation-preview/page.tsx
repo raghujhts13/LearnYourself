@@ -26,6 +26,8 @@ import type { SceneOutline, PdfImage, ImageMapping } from '@/lib/types/generatio
 import { createLogger } from '@/lib/logger';
 import { type GenerationSessionState, ALL_STEPS, getActiveSteps } from './types';
 import { StepVisualizer } from './components/visualizers';
+import { buildOutlinesFromPptSlides } from '@/lib/generation/ppt-outline-builder';
+import { buildSlideContentFromOutline } from '@/lib/generation/ppt-slide-content-builder';
 
 const log = createLogger('GenerationPreview');
 
@@ -125,7 +127,25 @@ function GenerationPreviewContent() {
       let activeSteps = getActiveSteps(currentSession);
 
       // Determine if we need the PDF analysis step
-      const hasPdfToAnalyze = !!currentSession.pdfStorageKey && !currentSession.pdfText;
+      const fileName = currentSession.pdfFileName?.toLowerCase();
+      const isPdfSourceFile = fileName ? fileName.endsWith('.pdf') : true;
+      const isFromSlidesMode = currentSession.requirements.generationMode === 'from-slides';
+      const isPptFile = fileName
+        ? fileName.endsWith('.ppt') || fileName.endsWith('.pptx')
+        : false;
+      // PPT files in from-slides mode are parsed via /api/parse-document (not the PDF path)
+      const hasPptToParseForSlides = isFromSlidesMode && isPptFile && !!currentSession.pdfStorageKey;
+      const shouldSkipPdfAnalysis =
+        currentSession.requirements.generationMode === 'from-slides' || !isPdfSourceFile;
+      const hasPdfToAnalyze =
+        !!currentSession.pdfStorageKey && !currentSession.pdfText && !shouldSkipPdfAnalysis;
+
+      if (shouldSkipPdfAnalysis && currentSession.pdfStorageKey && !hasPptToParseForSlides) {
+        log.debug('Skipping PDF analysis for non-PDF or from-slides source file', {
+          generationMode: currentSession.requirements.generationMode,
+          fileName: currentSession.pdfFileName,
+        });
+      }
       // If no PDF to analyze, skip to the next available step
       if (!hasPdfToAnalyze) {
         const firstNonPdfIdx = activeSteps.findIndex((s) => s.id !== 'pdf-analysis');
@@ -242,12 +262,14 @@ function GenerationPreviewContent() {
         );
 
         // Update session with parsed PDF data
+        // Keep pdfStorageKey if using from-slides mode to retain original file
+        const shouldRetainFile = currentSession.requirements.generationMode === 'from-slides';
         const updatedSession = {
           ...currentSession,
           pdfText,
           pdfImages,
           imageStorageIds,
-          pdfStorageKey: undefined, // Clear so we don't re-parse
+          pdfStorageKey: shouldRetainFile ? currentSession.pdfStorageKey : undefined, // Retain for from-slides mode
         };
         setSession(updatedSession);
         sessionStorage.setItem('generationSession', JSON.stringify(updatedSession));
@@ -337,9 +359,65 @@ function GenerationPreviewContent() {
         style: 'professional',
         createdAt: Date.now(),
         updatedAt: Date.now(),
+        sessionDate: Date.now(), // Set session date for classroom organization
+        classroomId: currentSession.classroomId, // Assign to classroom if specified
+        // Preserve source file metadata for PPT retention
+        sourceFileKey: currentSession.pdfStorageKey,
+        sourceFileName: currentSession.pdfFileName,
+        sourceFileType: currentSession.pdfFileName?.toLowerCase().endsWith('.pptx') 
+          ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+          : currentSession.pdfFileName?.toLowerCase().endsWith('.ppt')
+          ? 'application/vnd.ms-powerpoint'
+          : undefined,
+        generationMode: currentSession.requirements.generationMode,
       };
 
       const settings = useSettingsStore.getState();
+
+      // ── Parse PPT for from-slides mode ──
+      // Build outlines directly from the PPT slides — no AI involved.
+      let pptDerivedOutlines: SceneOutline[] | null = null;
+      if (hasPptToParseForSlides) {
+        log.debug('=== from-slides mode: parsing PPT ===');
+        const pptBlob = await loadPdfBlob(currentSession.pdfStorageKey!);
+        if (pptBlob instanceof Blob && pptBlob.size > 0) {
+          const ext = isPptFile && fileName?.endsWith('.ppt') ? '.ppt' : '.pptx';
+          const mimeType =
+            ext === '.ppt'
+              ? 'application/vnd.ms-powerpoint'
+              : 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+          const pptFile = new File(
+            [pptBlob],
+            currentSession.pdfFileName || `presentation${ext}`,
+            { type: mimeType },
+          );
+          const parseFormData = new FormData();
+          parseFormData.append('file', pptFile);
+
+          const parseResp = await fetch('/api/parse-document', {
+            method: 'POST',
+            body: parseFormData,
+            signal,
+          });
+
+          if (parseResp.ok) {
+            const parseResult = await parseResp.json();
+            if (parseResult.success && parseResult.data?.slides?.length > 0) {
+              pptDerivedOutlines = buildOutlinesFromPptSlides(
+                parseResult.data.slides,
+                currentSession.requirements.language,
+                currentSession.requirements.includeQuizzes ?? false,
+              );
+              log.debug(
+                `Built ${pptDerivedOutlines.length} outlines from ${parseResult.data.slides.length} PPT slides`,
+              );
+            }
+          }
+        }
+        if (!pptDerivedOutlines || pptDerivedOutlines.length === 0) {
+          log.warn('No slides extracted from PPT; falling back to AI outline generation');
+        }
+      }
 
       // ── Generate outlines ──
       let outlines = currentSession.sceneOutlines;
@@ -347,6 +425,17 @@ function GenerationPreviewContent() {
       const outlineStepIdx = activeSteps.findIndex((s) => s.id === 'outline');
       setCurrentStepIndex(outlineStepIdx >= 0 ? outlineStepIdx : 0);
       if (!outlines || outlines.length === 0) {
+        if (pptDerivedOutlines && pptDerivedOutlines.length > 0) {
+          // from-slides mode: use PPT-derived outlines, skip AI outline generation
+          log.debug('Using PPT-derived outlines (no AI outline generation)');
+          outlines = pptDerivedOutlines;
+          setStreamingOutlines(outlines);
+          const updatedSessionPpt = { ...currentSession, sceneOutlines: outlines };
+          setSession(updatedSessionPpt);
+          sessionStorage.setItem('generationSession', JSON.stringify(updatedSessionPpt));
+          currentSession = updatedSessionPpt;
+          await new Promise((resolve) => setTimeout(resolve, 400));
+        } else {
         log.debug('=== Generating outlines (SSE) ===');
         setStreamingOutlines([]);
 
@@ -440,6 +529,7 @@ function GenerationPreviewContent() {
 
         // Brief pause to let user see the final outline state
         await new Promise((resolve) => setTimeout(resolve, 800));
+        } // end else (SSE path)
       }
 
       // Move to scene generation step
@@ -475,29 +565,42 @@ function GenerationPreviewContent() {
 
       const firstOutline = outlines[0];
 
-      // Step 2: Generate content (currentStepIndex is already 2)
-      const contentResp = await fetch('/api/generate/scene-content', {
-        method: 'POST',
-        headers: getApiHeaders(),
-        body: JSON.stringify({
-          outline: firstOutline,
-          allOutlines: outlines,
-          pdfImages: currentSession.pdfImages,
-          imageMapping,
-          stageInfo,
-          stageId: stage.id,
-        }),
-        signal,
-      });
+      // Step 2: Generate content
+      // For from-slides mode with a slide scene: build content from PPT text without AI.
+      // Quizzes always use AI generation regardless of mode.
+      let contentData: { success: boolean; content: unknown; effectiveOutline?: SceneOutline; error?: string };
 
-      if (!contentResp.ok) {
-        const errorData = await contentResp.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(errorData.error || t('generation.sceneGenerateFailed'));
-      }
+      if (isFromSlidesMode && firstOutline.type === 'slide') {
+        log.debug(`from-slides: building slide content from text for "${firstOutline.title}"`);
+        contentData = {
+          success: true,
+          content: buildSlideContentFromOutline(firstOutline),
+          effectiveOutline: firstOutline,
+        };
+      } else {
+        const contentResp = await fetch('/api/generate/scene-content', {
+          method: 'POST',
+          headers: getApiHeaders(),
+          body: JSON.stringify({
+            outline: firstOutline,
+            allOutlines: outlines,
+            pdfImages: currentSession.pdfImages,
+            imageMapping,
+            stageInfo,
+            stageId: stage.id,
+          }),
+          signal,
+        });
 
-      const contentData = await contentResp.json();
-      if (!contentData.success || !contentData.content) {
-        throw new Error(contentData.error || t('generation.sceneGenerateFailed'));
+        if (!contentResp.ok) {
+          const errorData = await contentResp.json().catch(() => ({ error: 'Request failed' }));
+          throw new Error(errorData.error || t('generation.sceneGenerateFailed'));
+        }
+
+        contentData = await contentResp.json();
+        if (!contentData.success || !contentData.content) {
+          throw new Error(contentData.error || t('generation.sceneGenerateFailed'));
+        }
       }
 
       // Generate actions (activate actions step indicator)

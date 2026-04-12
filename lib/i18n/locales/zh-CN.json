@@ -279,7 +279,11 @@
     "exportSuccess": "课程导出成功",
     "exportFailed": "课程导出失败",
     "importSuccess": "课程导入成功",
-    "importFailed": "课程导入失败"
+    "importFailed": "课程导入失败",
+    "deleteClass": "删除课程",
+    "deleteClassConfirm": "确定删除该课程及其所有页面？此操作无法撤销。",
+    "deleteClassSuccess": "课程已删除",
+    "deleteClassFailed": "删除课程失败"
   },
   "upload": {
     "pdfSizeLimit": "支持最大50MB的PDF文件",

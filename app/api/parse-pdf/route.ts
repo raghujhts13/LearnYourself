@@ -32,6 +32,16 @@ export async function POST(req: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'No PDF file provided');
     }
 
+    const lowerFileName = (pdfFile.name || '').toLowerCase();
+    const isPdfFile = pdfFile.type === 'application/pdf' || lowerFileName.endsWith('.pdf');
+    if (!isPdfFile) {
+      return apiError(
+        'INVALID_REQUEST',
+        400,
+        `Unsupported file type for PDF parser: "${pdfFile.name}". Please upload a PDF file.`,
+      );
+    }
+
     // providerId is required from the client — no server-side store to fall back to
     const effectiveProviderId = providerId || ('unpdf' as PDFProviderId);
     pdfFileName = pdfFile?.name;

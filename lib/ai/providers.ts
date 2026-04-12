@@ -342,6 +342,13 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
         capabilities: { streaming: true, tools: true, vision: true },
       },
       {
+        id: 'gemma4:26b',
+        name: 'Gemma 4 26B',
+        contextWindow: 131072,
+        outputWindow: 8192,
+        capabilities: { streaming: true, tools: true, vision: true },
+      },
+      {
         id: 'deepseek-r1',
         name: 'DeepSeek R1',
         contextWindow: 131072,

@@ -6,12 +6,12 @@
  */
 
 import { Stage, Scene } from '../types/stage';
-import { db, type FolderRecord } from './database';
+import { db, type FolderRecord, type ClassroomRecord } from './database';
 import { clearPlaybackState, loadPlaybackState } from './playback-storage';
 import { createLogger } from '@/lib/logger';
 import { nanoid } from 'nanoid';
 
-export type { FolderRecord };
+export type { FolderRecord, ClassroomRecord };
 
 const log = createLogger('StageStorage');
 
@@ -19,6 +19,44 @@ export interface StageStoreData {
   stage: Stage;
   scenes: Scene[];
   currentSceneId: string | null;
+}
+
+/**
+ * Get all stages that are not assigned to any classroom
+ */
+export async function getUnassignedStages(): Promise<StageListItem[]> {
+  try {
+    const allStages = await db.stages.toArray();
+    // Sort in memory to avoid index issues if some records lack updatedAt
+    allStages.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    const unassigned = allStages.filter((stage) => !stage.classroomId);
+
+    const stageList: StageListItem[] = await Promise.all(
+      unassigned.map(async (stage) => {
+        const sceneCount = await db.scenes.where('stageId').equals(stage.id).count();
+        const playback = await loadPlaybackState(stage.id);
+
+        return {
+          id: stage.id,
+          name: stage.name,
+          description: stage.description,
+          sceneCount,
+          createdAt: stage.createdAt,
+          updatedAt: stage.updatedAt,
+          lastSceneIndex: playback ? playback.sceneIndex : undefined,
+          publishedUrl: stage.publishedUrl,
+          folderId: stage.folderId,
+          classroomId: stage.classroomId,
+          sessionDate: stage.sessionDate,
+        };
+      }),
+    );
+
+    return stageList;
+  } catch (error) {
+    log.error('Failed to get unassigned stages:', error);
+    return [];
+  }
 }
 
 export interface StageListItem {
@@ -32,8 +70,12 @@ export interface StageListItem {
   lastSceneIndex?: number;
   /** URL of the published classroom on the server, if published */
   publishedUrl?: string;
-  /** Folder this classroom belongs to, if any */
+  /** Folder this classroom belongs to, if any (deprecated, use classroomId) */
   folderId?: string;
+  /** Classroom this class session belongs to */
+  classroomId?: string;
+  /** Date of this class session */
+  sessionDate?: number;
 }
 
 /**
@@ -43,10 +85,10 @@ export async function saveStageData(stageId: string, data: StageStoreData): Prom
   try {
     const now = Date.now();
 
-    // Preserve publishedUrl if already set
+    // Preserve publishedUrl and classroomId if already set
     const existing = await db.stages.get(stageId);
 
-    // Save to stages table
+    // Save to stages table — preserve existing DB-only fields when not supplied by the stage object
     await db.stages.put({
       id: stageId,
       name: data.stage.name || 'Untitled Stage',
@@ -57,6 +99,13 @@ export async function saveStageData(stageId: string, data: StageStoreData): Prom
       style: data.stage.style,
       currentSceneId: data.currentSceneId || undefined,
       publishedUrl: existing?.publishedUrl,
+      classroomId: data.stage.classroomId ?? existing?.classroomId,
+      sessionDate: data.stage.sessionDate ?? existing?.sessionDate,
+      folderId: existing?.folderId,
+      sourceFileKey: data.stage.sourceFileKey ?? existing?.sourceFileKey,
+      sourceFileName: data.stage.sourceFileName ?? existing?.sourceFileName,
+      sourceFileType: data.stage.sourceFileType ?? existing?.sourceFileType,
+      generationMode: data.stage.generationMode ?? existing?.generationMode,
     });
 
     // Delete old scenes first to avoid orphaned data
@@ -115,14 +164,30 @@ export async function loadStageData(stageId: string): Promise<StageStoreData | n
  */
 export async function deleteStageData(stageId: string): Promise<void> {
   try {
-    // Delete stage
-    await db.stages.delete(stageId);
+    // Get stage to check for source file
+    const stage = await db.stages.get(stageId);
 
-    // Delete scenes
-    await db.scenes.where('stageId').equals(stageId).delete();
+    // Delete source file blob if present
+    if (stage?.sourceFileKey) {
+      try {
+        await db.imageFiles.delete(stage.sourceFileKey);
+        log.info(`Deleted source file: ${stage.sourceFileKey}`);
+      } catch (err) {
+        log.warn('Failed to delete source file blob:', err);
+      }
+    }
 
-    // Delete playback state
-    await clearPlaybackState(stageId);
+    await db.transaction(
+      'rw',
+      [db.stages, db.scenes, db.playbackState, db.stageOutlines, db.mediaFiles],
+      async () => {
+        await db.stages.delete(stageId);
+        await db.scenes.where('stageId').equals(stageId).delete();
+        await db.playbackState.delete(stageId);
+        await db.stageOutlines.delete(stageId);
+        await db.mediaFiles.where('stageId').equals(stageId).delete();
+      },
+    );
 
     log.info(`Deleted stage: ${stageId}`);
   } catch (error) {
@@ -136,7 +201,8 @@ export async function deleteStageData(stageId: string): Promise<void> {
  */
 export async function listStages(): Promise<StageListItem[]> {
   try {
-    const stages = await db.stages.orderBy('updatedAt').reverse().toArray();
+    const stages = await db.stages.toArray();
+    stages.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
     const stageList: StageListItem[] = await Promise.all(
       stages.map(async (stage) => {
@@ -153,6 +219,8 @@ export async function listStages(): Promise<StageListItem[]> {
           lastSceneIndex: playback ? playback.sceneIndex : undefined,
           publishedUrl: stage.publishedUrl,
           folderId: stage.folderId,
+          classroomId: stage.classroomId,
+          sessionDate: stage.sessionDate,
         };
       }),
     );
@@ -330,6 +398,219 @@ export async function moveStageToFolder(
     log.info(`Moved stage ${stageId} to folder: ${folderId ?? 'none'}`);
   } catch (error) {
     log.error('Failed to move stage to folder:', error);
+    throw error;
+  }
+}
+
+// ─── Classroom CRUD ───────────────────────────────────────────────────────────
+
+/**
+ * List all classrooms ordered by update date
+ */
+export async function listClassrooms(): Promise<ClassroomRecord[]> {
+  try {
+    const classrooms = await db.classrooms.toArray();
+    classrooms.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    // Recovery path: if stages reference classroom IDs that no longer exist in
+    // classrooms table, recreate minimal classroom records so data remains visible.
+    const existingIds = new Set(classrooms.map((c) => c.id));
+    const allStages = await db.stages.toArray();
+    const referencedClassroomIds = Array.from(
+      new Set(allStages.map((s) => s.classroomId).filter((id): id is string => Boolean(id))),
+    );
+
+    const missingIds = referencedClassroomIds.filter((id) => !existingIds.has(id));
+    if (missingIds.length > 0) {
+      const now = Date.now();
+      await db.classrooms.bulkPut(
+        missingIds.map((id) => ({
+          id,
+          name: `Recovered Classroom ${id.slice(0, 6)}`,
+          description: 'Recovered automatically from existing class data',
+          createdAt: now,
+          updatedAt: now,
+        })),
+      );
+      log.warn(`Recovered ${missingIds.length} missing classroom record(s) from stage data`);
+      return db.classrooms.orderBy('updatedAt').reverse().toArray();
+    }
+
+    return classrooms;
+  } catch (error) {
+    log.error('Failed to list classrooms:', error);
+    return [];
+  }
+}
+
+/**
+ * Create a new classroom; returns the new classroom id
+ */
+export async function createClassroom(name: string, description?: string): Promise<string> {
+  const now = Date.now();
+  const id = nanoid();
+  await db.classrooms.add({ id, name, description, createdAt: now, updatedAt: now });
+  log.info(`Created classroom: ${id} "${name}"`);
+  return id;
+}
+
+/**
+ * Get a classroom by id
+ */
+export async function getClassroom(classroomId: string): Promise<ClassroomRecord | undefined> {
+  try {
+    return await db.classrooms.get(classroomId);
+  } catch (error) {
+    log.error('Failed to get classroom:', error);
+    return undefined;
+  }
+}
+
+/**
+ * Rename a classroom
+ */
+export async function renameClassroom(classroomId: string, newName: string): Promise<void> {
+  try {
+    await db.classrooms.update(classroomId, { name: newName, updatedAt: Date.now() });
+    log.info(`Renamed classroom ${classroomId} to "${newName}"`);
+  } catch (error) {
+    log.error('Failed to rename classroom:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update classroom description
+ */
+export async function updateClassroomDescription(
+  classroomId: string,
+  description: string,
+): Promise<void> {
+  try {
+    await db.classrooms.update(classroomId, { description, updatedAt: Date.now() });
+    log.info(`Updated classroom ${classroomId} description`);
+  } catch (error) {
+    log.error('Failed to update classroom description:', error);
+    throw error;
+  }
+}
+
+/**
+ * Delete a classroom; class sessions inside it become uncategorized
+ */
+export async function deleteClassroom(classroomId: string): Promise<void> {
+  try {
+    await db.transaction('rw', [db.classrooms, db.stages], async () => {
+      // Detach all stages from this classroom first
+      await db.stages.where('classroomId').equals(classroomId).modify({ classroomId: undefined });
+      await db.classrooms.delete(classroomId);
+    });
+    log.info(`Deleted classroom: ${classroomId}`);
+  } catch (error) {
+    log.error('Failed to delete classroom:', error);
+    throw error;
+  }
+}
+
+/**
+ * Move a stage into a classroom, or pass null to remove it from all classrooms
+ */
+export async function moveStageToClassroom(
+  stageId: string,
+  classroomId: string | null,
+): Promise<void> {
+  try {
+    await db.stages.update(stageId, {
+      classroomId: classroomId ?? undefined,
+      updatedAt: Date.now(),
+    });
+    log.info(`Moved stage ${stageId} to classroom: ${classroomId ?? 'none'}`);
+  } catch (error) {
+    log.error('Failed to move stage to classroom:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get all stages (class sessions) for a classroom
+ */
+export async function getClassroomStages(classroomId: string): Promise<StageListItem[]> {
+  try {
+    const stages = await db.stages
+      .where('classroomId')
+      .equals(classroomId)
+      .reverse()
+      .sortBy('updatedAt');
+
+    const stageList: StageListItem[] = await Promise.all(
+      stages.map(async (stage) => {
+        const sceneCount = await db.scenes.where('stageId').equals(stage.id).count();
+        const playback = await loadPlaybackState(stage.id);
+
+        return {
+          id: stage.id,
+          name: stage.name,
+          description: stage.description,
+          sceneCount,
+          createdAt: stage.createdAt,
+          updatedAt: stage.updatedAt,
+          lastSceneIndex: playback ? playback.sceneIndex : undefined,
+          publishedUrl: stage.publishedUrl,
+          folderId: stage.folderId,
+          classroomId: stage.classroomId,
+          sessionDate: stage.sessionDate,
+        };
+      }),
+    );
+
+    return stageList;
+  } catch (error) {
+    log.error('Failed to get classroom stages:', error);
+    return [];
+  }
+}
+
+/**
+ * Migration: Convert all folders to classrooms
+ * This is a one-time migration function
+ */
+export async function migrateFoldersToClassrooms(): Promise<void> {
+  try {
+    const folders = await db.folders.toArray();
+    if (folders.length === 0) {
+      log.info('No folders to migrate');
+      return;
+    }
+
+    await db.transaction('rw', [db.folders, db.classrooms, db.stages], async () => {
+      for (const folder of folders) {
+        // Create corresponding classroom
+        const classroomRecord: ClassroomRecord = {
+          id: folder.id, // Preserve the ID for easier migration
+          name: folder.name,
+          description: undefined,
+          createdAt: folder.createdAt,
+          updatedAt: folder.updatedAt,
+        };
+        await db.classrooms.put(classroomRecord);
+
+        // Update all stages with this folderId to use classroomId instead
+        const stagesInFolder = await db.stages.where('folderId').equals(folder.id).toArray();
+        for (const stage of stagesInFolder) {
+          await db.stages.update(stage.id, {
+            classroomId: folder.id,
+            folderId: undefined, // Clear the old folderId
+          });
+        }
+      }
+
+      // Delete all folders after migration
+      await db.folders.clear();
+    });
+
+    log.info(`Migrated ${folders.length} folders to classrooms`);
+  } catch (error) {
+    log.error('Failed to migrate folders to classrooms:', error);
     throw error;
   }
 }

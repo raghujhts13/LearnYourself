@@ -279,7 +279,11 @@
     "exportSuccess": "セッションのエクスポートに成功しました",
     "exportFailed": "セッションのエクスポートに失敗しました",
     "importSuccess": "セッションのインポートに成功しました",
-    "importFailed": "セッションのインポートに失敗しました"
+    "importFailed": "セッションのインポートに失敗しました",
+    "deleteClass": "クラスを削除",
+    "deleteClassConfirm": "このクラスとすべてのスライドを削除しますか？元に戻せません。",
+    "deleteClassSuccess": "クラスを削除しました",
+    "deleteClassFailed": "クラスの削除に失敗しました"
   },
   "upload": {
     "pdfSizeLimit": "50MBまでのPDFファイルに対応しています",

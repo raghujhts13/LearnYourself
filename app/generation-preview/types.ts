@@ -24,6 +24,8 @@ export interface GenerationSessionState {
   // Web search context
   researchContext?: string;
   researchSources?: Array<{ title: string; url: string }>;
+  // Classroom assignment
+  classroomId?: string;
 }
 
 export type GenerationStep = {

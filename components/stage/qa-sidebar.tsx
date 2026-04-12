@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, MessageCircleQuestion, X, RotateCcw } from 'lucide-react';
+import { Send, Loader2, MessageCircleQuestion, X, RotateCcw, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getCurrentModelConfig } from '@/lib/utils/model-config';
+import { useSettingsStore } from '@/lib/store/settings';
+import { PROVIDERS } from '@/lib/ai/providers';
 import type { Scene } from '@/lib/types/stage';
 import type { SpeechAction } from '@/lib/types/action';
+import type { ProviderId } from '@/lib/ai/providers';
 
 interface Message {
   id: string;
@@ -35,9 +38,42 @@ export function QASidebar({ scene, onClose }: QASidebarProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Get current model settings
+  const providerId = useSettingsStore((s) => s.providerId);
+  const modelId = useSettingsStore((s) => s.modelId);
+  const providersConfig = useSettingsStore((s) => s.providersConfig);
+  const setModel = useSettingsStore((s) => s.setModel);
+
+  // Get available models
+  const getAvailableModels = () => {
+    const models: Array<{ providerId: ProviderId; modelId: string; modelName: string }> = [];
+    Object.entries(providersConfig).forEach(([pid, config]) => {
+      // Show models if provider has API key or is server-configured
+      if (config.apiKey || config.isServerConfigured) {
+        const providerModels = config.models || [];
+        if (providerModels.length > 0) {
+          providerModels.forEach((model) => {
+            models.push({
+              providerId: pid as ProviderId,
+              modelId: model.id,
+              modelName: `${config.name}: ${model.name}`,
+            });
+          });
+        }
+      }
+    });
+    return models;
+  };
+
+  const availableModels = getAvailableModels();
+  const currentModelName = availableModels.find(
+    (m) => m.providerId === providerId && m.modelId === modelId,
+  )?.modelName || 'Select Model';
 
   // Scroll to bottom whenever messages update
   useEffect(() => {
@@ -59,7 +95,7 @@ export function QASidebar({ scene, onClose }: QASidebarProps) {
     if (modelConfig.baseUrl) headers['x-base-url'] = modelConfig.baseUrl;
     if (modelConfig.providerType) headers['x-provider-type'] = modelConfig.providerType;
     return headers;
-  }, []);
+  }, [providerId, modelId]);
 
   const sendMessage = useCallback(async () => {
     const trimmed = input.trim();
@@ -165,6 +201,51 @@ export function QASidebar({ scene, onClose }: QASidebarProps) {
         >
           <X className="w-3.5 h-3.5" />
         </button>
+      </div>
+
+      {/* Model selector */}
+      <div className="px-3 py-2 border-b border-gray-200/60 dark:border-gray-700/60 shrink-0">
+        <div className="relative">
+          <button
+            onClick={() => setModelSelectorOpen(!modelSelectorOpen)}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide">
+                Chat Model
+              </p>
+              <p className="text-xs text-gray-700 dark:text-gray-300 font-medium truncate">
+                {currentModelName}
+              </p>
+            </div>
+            <ChevronDown className={cn(
+              'w-3.5 h-3.5 text-gray-400 transition-transform shrink-0 ml-2',
+              modelSelectorOpen && 'rotate-180'
+            )} />
+          </button>
+
+          {/* Dropdown */}
+          {modelSelectorOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-h-48 overflow-y-auto z-50">
+              {availableModels.map((model) => (
+                <button
+                  key={`${model.providerId}:${model.modelId}`}
+                  onClick={() => {
+                    setModel(model.providerId, model.modelId);
+                    setModelSelectorOpen(false);
+                  }}
+                  className={cn(
+                    'w-full px-3 py-2 text-left text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors',
+                    model.providerId === providerId && model.modelId === modelId &&
+                      'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300'
+                  )}
+                >
+                  {model.modelName}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Slide context badge */}

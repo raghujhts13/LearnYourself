@@ -21,6 +21,31 @@ import { validateProvider, validateModel } from '@/lib/store/settings-validation
 
 const log = createLogger('Settings');
 
+function normalizeServerModelId(rawId: string): string {
+  const trimmed = rawId.trim();
+  if (!trimmed) return '';
+
+  // Normalize Windows paths to POSIX first
+  const normalizedPath = trimmed.replace(/\\/g, '/');
+  // If a path-like value is provided, keep only the last segment
+  const basename = normalizedPath.includes('/')
+    ? normalizedPath.split('/').filter(Boolean).pop() || normalizedPath
+    : normalizedPath;
+
+  return basename.trim();
+}
+
+function normalizeModelFamilyId(modelId: string): string {
+  const normalized = normalizeServerModelId(modelId).toLowerCase();
+  // Treat ':latest' aliases as equivalent to base tag
+  return normalized.endsWith(':latest') ? normalized.slice(0, -':latest'.length) : normalized;
+}
+
+function isLikelyModelFolderToken(modelId: string): boolean {
+  const token = normalizeServerModelId(modelId).toLowerCase();
+  return token === 'models' || token === 'manifests' || token === 'blobs';
+}
+
 /** Available playback speed tiers */
 export const PLAYBACK_SPEEDS = [1, 1.25, 1.5, 2] as const;
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
@@ -683,16 +708,43 @@ export const useSettingsStore = create<SettingsState>()(
                 const key = pid as ProviderId;
                 if (newProvidersConfig[key]) {
                   const currentModels = newProvidersConfig[key].models;
+                  const normalizedServerModels = Array.from(
+                    new Set(
+                      (info.models || [])
+                        .map((id) => normalizeServerModelId(id))
+                        .filter((id) => !!id && !isLikelyModelFolderToken(id)),
+                    ),
+                  );
+                  const allowedModelFamilies = new Set(
+                    normalizedServerModels.map((id) => normalizeModelFamilyId(id)),
+                  );
+
                   // When server specifies allowed models, filter the models list
-                  const filteredModels = info.models?.length
-                    ? currentModels.filter((m) => info.models!.includes(m.id))
+                  const filteredModels = normalizedServerModels.length
+                    ? currentModels.filter((m) => allowedModelFamilies.has(normalizeModelFamilyId(m.id)))
+                    : currentModels;
+                  // If server models don't match local registry exactly (e.g. tag/name drift),
+                  // keep server-advertised models so provider remains selectable.
+                  const effectiveModels = normalizedServerModels.length
+                    ? filteredModels.length > 0
+                      ? filteredModels
+                      : normalizedServerModels.map((modelId) => {
+                          const matched = currentModels.find((m) => m.id === modelId);
+                          return (
+                            matched || {
+                              id: modelId,
+                              name: modelId,
+                              capabilities: { streaming: true },
+                            }
+                          );
+                        })
                     : currentModels;
                   newProvidersConfig[key] = {
                     ...newProvidersConfig[key],
                     isServerConfigured: true,
-                    serverModels: info.models,
+                    serverModels: normalizedServerModels,
                     serverBaseUrl: info.baseUrl,
-                    models: filteredModels,
+                    models: effectiveModels,
                   };
                 }
               }
@@ -821,6 +873,17 @@ export const useSettingsStore = create<SettingsState>()(
                   .map(([id]) => id as T),
                 ...Object.entries(config)
                   .filter(([, c]) => !c.isServerConfigured && !!c.apiKey)
+                  .map(([id]) => id as T),
+                ...Object.entries(config)
+                  .filter(([id, c]) => {
+                    const providerDef = PROVIDERS[id as ProviderId];
+                    return (
+                      !c.isServerConfigured &&
+                      !c.apiKey &&
+                      !!providerDef &&
+                      providerDef.requiresApiKey === false
+                    );
+                  })
                   .map(([id]) => id as T),
               ];
 

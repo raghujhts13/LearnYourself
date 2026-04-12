@@ -23,6 +23,21 @@ import { MONO_LOGO_PROVIDERS } from '@/lib/ai/providers';
 import type { ProvidersConfig } from '@/lib/types/settings';
 import { formatContextWindow } from './utils';
 
+function normalizeServerModelId(rawId: string): string {
+  const trimmed = rawId.trim();
+  if (!trimmed) return '';
+  const normalizedPath = trimmed.replace(/\\/g, '/');
+  const basename = normalizedPath.includes('/')
+    ? normalizedPath.split('/').filter(Boolean).pop() || normalizedPath
+    : normalizedPath;
+  return basename.trim();
+}
+
+function normalizeModelFamilyId(modelId: string): string {
+  const normalized = normalizeServerModelId(modelId).toLowerCase();
+  return normalized.endsWith(':latest') ? normalized.slice(0, -':latest'.length) : normalized;
+}
+
 interface ModelSelectorProps {
   providerId: ProviderId;
   modelId: string;
@@ -93,8 +108,13 @@ export function ModelSelector({
     let models = config?.models || [];
     // When using server config without own key, restrict to server-allowed models
     if (config?.isServerConfigured && !config.apiKey && config.serverModels?.length) {
-      const allowed = new Set(config.serverModels);
-      models = models.filter((m) => allowed.has(m.id));
+      const allowed = new Set(
+        config.serverModels
+          .map((mid) => normalizeServerModelId(mid))
+          .filter(Boolean)
+          .map((mid) => normalizeModelFamilyId(mid)),
+      );
+      models = models.filter((m) => allowed.has(normalizeModelFamilyId(m.id)));
     }
     if (!searchQuery) return models;
     return models.filter(

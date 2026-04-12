@@ -27,6 +27,21 @@ import { MediaPopover } from '@/components/generation/media-popover';
 const MAX_PDF_SIZE_MB = 50;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
 
+function normalizeServerModelId(rawId: string): string {
+  const trimmed = rawId.trim();
+  if (!trimmed) return '';
+  const normalizedPath = trimmed.replace(/\\/g, '/');
+  const basename = normalizedPath.includes('/')
+    ? normalizedPath.split('/').filter(Boolean).pop() || normalizedPath
+    : normalizedPath;
+  return basename.trim();
+}
+
+function normalizeModelFamilyId(modelId: string): string {
+  const normalized = normalizeServerModelId(modelId).toLowerCase();
+  return normalized.endsWith(':latest') ? normalized.slice(0, -':latest'.length) : normalized;
+}
+
 // ─── Types ───────────────────────────────────────────────────
 export interface GenerationToolbarProps {
   language: 'zh-CN' | 'en-US';
@@ -34,10 +49,16 @@ export interface GenerationToolbarProps {
   webSearch: boolean;
   onWebSearchChange: (v: boolean) => void;
   onSettingsOpen: (section?: SettingsSection) => void;
-  // PDF
+  // Document upload (PDF, DOCX, TXT, PPT, PPTX)
   pdfFile: File | null;
   onPdfFileChange: (file: File | null) => void;
   onPdfError: (error: string | null) => void;
+  // Quiz toggle
+  includeQuizzes?: boolean;
+  onIncludeQuizzesChange?: (v: boolean) => void;
+  // Generation mode
+  generationMode?: 'ai' | 'from-slides';
+  onGenerationModeChange?: (mode: 'ai' | 'from-slides') => void;
 }
 
 // ─── Component ───────────────────────────────────────────────
@@ -50,6 +71,10 @@ export function GenerationToolbar({
   pdfFile,
   onPdfFileChange,
   onPdfError,
+  includeQuizzes = false,
+  onIncludeQuizzesChange,
+  generationMode = 'ai',
+  onGenerationModeChange,
 }: GenerationToolbarProps) {
   const { t } = useI18n();
   const currentProviderId = useSettingsStore((s) => s.providerId);
@@ -90,16 +115,38 @@ export function GenerationToolbar({
           isServerConfigured: config.isServerConfigured,
           models:
             config.isServerConfigured && !config.apiKey && config.serverModels?.length
-              ? config.models.filter((m) => new Set(config.serverModels).has(m.id))
+              ? (() => {
+                  const allowed = new Set(
+                    config.serverModels
+                      .map((mid) => normalizeServerModelId(mid))
+                      .filter(Boolean)
+                      .map((mid) => normalizeModelFamilyId(mid)),
+                  );
+                  return config.models.filter((m) => allowed.has(normalizeModelFamilyId(m.id)));
+                })()
               : config.models,
         }))
     : [];
 
   const currentProviderConfig = providersConfig?.[currentProviderId];
 
-  // PDF handler
+  // Document handler (supports PDF, DOCX, TXT, PPT, PPTX)
   const handleFileSelect = (file: File) => {
-    if (file.type !== 'application/pdf') return;
+    const validTypes = [
+      'application/pdf',
+      'text/plain',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ];
+    const validExtensions = ['pdf', 'txt', 'docx', 'ppt', 'pptx'];
+    const ext = file.name.toLowerCase().split('.').pop();
+    
+    if (!validTypes.includes(file.type) && !validExtensions.includes(ext || '')) {
+      onPdfError(t('upload.unsupportedFileType'));
+      return;
+    }
+    
     if (file.size > MAX_PDF_SIZE_BYTES) {
       onPdfError(t('upload.fileTooLarge'));
       return;
@@ -148,7 +195,7 @@ export function GenerationToolbar({
       {/* ── Separator ── */}
       <div className="w-px h-4 bg-border/60 mx-1" />
 
-      {/* ── PDF (parser + upload) combined Popover ── */}
+      {/* ── Document Upload (PDF, DOCX, TXT, PPT, PPTX) ── */}
       <Popover>
         <PopoverTrigger asChild>
           {pdfFile ? (
@@ -173,10 +220,10 @@ export function GenerationToolbar({
           )}
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-0">
-          {/* Parser selector */}
+          {/* Parser selector (PDF only - other formats use built-in parsers) */}
           <div className="flex items-center gap-2 px-3 pt-3 pb-2">
             <span className="text-xs font-medium text-muted-foreground shrink-0">
-              {t('toolbar.pdfParser')}
+              {t('toolbar.documentParser')}
             </span>
             <Select value={pdfProviderId} onValueChange={(v) => setPDFProvider(v as PDFProviderId)}>
               <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
@@ -213,7 +260,7 @@ export function GenerationToolbar({
               type="file"
               ref={fileInputRef}
               className="hidden"
-              accept=".pdf"
+              accept=".pdf,.docx,.txt,.ppt,.pptx"
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) handleFileSelect(f);
@@ -237,7 +284,7 @@ export function GenerationToolbar({
                   onClick={() => onPdfFileChange(null)}
                   className="w-full text-xs text-destructive hover:underline text-left"
                 >
-                  {t('toolbar.removePdf')}
+                  {t('toolbar.removeDocument')}
                 </button>
               </div>
             ) : (
@@ -262,9 +309,9 @@ export function GenerationToolbar({
                 }}
               >
                 <Paperclip className="size-5 text-muted-foreground/50 mb-1.5" />
-                <p className="text-xs font-medium">{t('toolbar.pdfUpload')}</p>
+                <p className="text-xs font-medium">{t('toolbar.documentUpload')}</p>
                 <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                  {t('upload.pdfSizeLimit')}
+                  {t('upload.documentSizeLimit')}
                 </p>
               </div>
             )}
@@ -356,6 +403,65 @@ export function GenerationToolbar({
           </TooltipTrigger>
           <TooltipContent>{t('toolbar.webSearchNoProvider')}</TooltipContent>
         </Tooltip>
+      )}
+
+      {/* ── Quiz Toggle ── */}
+      {onIncludeQuizzesChange && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => onIncludeQuizzesChange(!includeQuizzes)}
+              className={includeQuizzes ? pillActive : pillMuted}
+            >
+              <span className="text-[10px] font-medium">Quiz</span>
+              {includeQuizzes && <Check className="size-3" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {includeQuizzes ? t('toolbar.quizzesEnabled') : t('toolbar.quizzesDisabled')}
+          </TooltipContent>
+        </Tooltip>
+      )}
+
+      {/* ── Generation Mode Toggle ── */}
+      {onGenerationModeChange && pdfFile && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button className={generationMode === 'from-slides' ? pillActive : pillMuted}>
+              <span className="text-[10px] font-medium">
+                {generationMode === 'ai' ? '🤖 AI' : '📊 Slides'}
+              </span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-52 p-2 space-y-1">
+            <button
+              onClick={() => onGenerationModeChange('ai')}
+              className={cn(
+                'w-full flex items-center gap-2 rounded px-2 py-1.5 text-left transition-all text-xs',
+                generationMode === 'ai'
+                  ? 'bg-violet-50 dark:bg-violet-950/20 text-violet-700 dark:text-violet-300'
+                  : 'hover:bg-muted/50',
+              )}
+            >
+              <span>🤖</span>
+              <span className="flex-1">{t('toolbar.generationModeAi')}</span>
+              {generationMode === 'ai' && <Check className="size-3" />}
+            </button>
+            <button
+              onClick={() => onGenerationModeChange('from-slides')}
+              className={cn(
+                'w-full flex items-center gap-2 rounded px-2 py-1.5 text-left transition-all text-xs',
+                generationMode === 'from-slides'
+                  ? 'bg-violet-50 dark:bg-violet-950/20 text-violet-700 dark:text-violet-300'
+                  : 'hover:bg-muted/50',
+              )}
+            >
+              <span>📊</span>
+              <span className="flex-1">{t('toolbar.generationModeSlides')}</span>
+              {generationMode === 'from-slides' && <Check className="size-3" />}
+            </button>
+          </PopoverContent>
+        </Popover>
       )}
 
       {/* ── Language pill — only English is supported; toggle hidden ── */}

@@ -11,6 +11,7 @@ import type { Scene, SceneType } from '@/lib/types/stage';
 import type { SpeechAction } from '@/lib/types/action';
 import { splitLongSpeechActions } from '@/lib/audio/tts-utils';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
+import { buildSlideContentFromOutline } from '@/lib/generation/ppt-slide-content-builder';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('SceneGenerator');
@@ -328,18 +329,29 @@ export function useSceneGenerator(options: UseSceneGeneratorOptions = {}) {
           store.getState().setCurrentGeneratingOrder(outline.order);
 
           // Step 1: Generate content
+          // For from-slides mode: build slide scenes from text without AI.
+          // Quizzes (and AI mode) always go through the API.
           options.onPhaseChange?.('content', outline);
-          const contentResult = await fetchSceneContent(
-            {
-              outline,
-              allOutlines: outlines,
-              stageId: stage.id,
-              pdfImages: params.pdfImages,
-              imageMapping: params.imageMapping,
-              stageInfo: params.stageInfo,
-            },
-            signal,
-          );
+          let contentResult: SceneContentResult;
+          if (stage.generationMode === 'from-slides' && outline.type === 'slide') {
+            contentResult = {
+              success: true,
+              content: buildSlideContentFromOutline(outline),
+              effectiveOutline: outline,
+            };
+          } else {
+            contentResult = await fetchSceneContent(
+              {
+                outline,
+                allOutlines: outlines,
+                stageId: stage.id,
+                pdfImages: params.pdfImages,
+                imageMapping: params.imageMapping,
+                stageInfo: params.stageInfo,
+              },
+              signal,
+            );
+          }
 
           if (!contentResult.success || !contentResult.content) {
             if (abortRef.current || store.getState().generationEpoch !== startEpoch) {
@@ -474,17 +486,26 @@ export function useSceneGenerator(options: UseSceneGeneratorOptions = {}) {
 
       try {
         // Step 1: Content
-        const contentResult = await fetchSceneContent(
-          {
-            outline,
-            allOutlines: state.outlines,
-            stageId: state.stage.id,
-            pdfImages: params.pdfImages,
-            imageMapping: params.imageMapping,
-            stageInfo: params.stageInfo,
-          },
-          signal,
-        );
+        let contentResult: SceneContentResult;
+        if (state.stage?.generationMode === 'from-slides' && outline.type === 'slide') {
+          contentResult = {
+            success: true,
+            content: buildSlideContentFromOutline(outline),
+            effectiveOutline: outline,
+          };
+        } else {
+          contentResult = await fetchSceneContent(
+            {
+              outline,
+              allOutlines: state.outlines,
+              stageId: state.stage.id,
+              pdfImages: params.pdfImages,
+              imageMapping: params.imageMapping,
+              stageInfo: params.stageInfo,
+            },
+            signal,
+          );
+        }
 
         if (!contentResult.success || !contentResult.content) {
           store.getState().addFailedOutline(outline);

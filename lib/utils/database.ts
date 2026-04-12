@@ -28,7 +28,18 @@ export interface Snapshot {
 // ==================== Database Table Type Definitions ====================
 
 /**
- * Folder table - Groups of classrooms
+ * Classroom table - Container for multiple class sessions
+ */
+export interface ClassroomRecord {
+  id: string; // Primary key (nanoid)
+  name: string;
+  description?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * Folder table - Groups of classrooms (deprecated, migrated to classrooms)
  */
 export interface FolderRecord {
   id: string; // Primary key (nanoid)
@@ -38,7 +49,7 @@ export interface FolderRecord {
 }
 
 /**
- * Stage table - Course basic info
+ * Stage table - Course basic info (represents a single class session)
  */
 export interface StageRecord {
   id: string; // Primary key
@@ -51,8 +62,17 @@ export interface StageRecord {
   currentSceneId?: string;
   /** URL of the published classroom on the server, if published */
   publishedUrl?: string;
-  /** Optional folder this classroom belongs to */
+  /** Optional folder this classroom belongs to (deprecated, use classroomId) */
   folderId?: string;
+  /** Parent classroom this class session belongs to */
+  classroomId?: string;
+  /** Date of this class session */
+  sessionDate?: number;
+  /** Source file metadata for PPT retention */
+  sourceFileKey?: string;
+  sourceFileName?: string;
+  sourceFileType?: string;
+  generationMode?: 'ai' | 'from-slides';
 }
 
 /**
@@ -145,7 +165,7 @@ export function mediaFileKey(stageId: string, elementId: string): string {
 // ==================== Database Definition ====================
 
 const DATABASE_NAME = 'MAIC-Database';
-const _DATABASE_VERSION = 9;
+const _DATABASE_VERSION = 11;
 
 /**
  * MAIC Database Instance
@@ -161,6 +181,7 @@ class MAICDatabase extends Dexie {
   stageOutlines!: EntityTable<StageOutlinesRecord, 'stageId'>;
   mediaFiles!: EntityTable<MediaFileRecord, 'id'>;
   folders!: EntityTable<FolderRecord, 'id'>;
+  classrooms!: EntityTable<ClassroomRecord, 'id'>;
 
   constructor() {
     super(DATABASE_NAME);
@@ -299,6 +320,20 @@ class MAICDatabase extends Dexie {
       stageOutlines: 'stageId',
       mediaFiles: 'id, stageId, [stageId+type]',
       folders: 'id, updatedAt',
+    });
+
+    // Version 11: Add classrooms table and classroomId index on stages
+    this.version(11).stores({
+      stages: 'id, updatedAt, folderId, classroomId',
+      scenes: 'id, stageId, order, [stageId+order]',
+      audioFiles: 'id, createdAt',
+      imageFiles: 'id, createdAt',
+      snapshots: '++id',
+      playbackState: 'stageId',
+      stageOutlines: 'stageId',
+      mediaFiles: 'id, stageId, [stageId+type]',
+      folders: 'id, updatedAt',
+      classrooms: 'id, updatedAt',
     });
   }
 }
