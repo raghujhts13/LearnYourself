@@ -18,7 +18,7 @@ You are an educational content designer. Generate well-structured slide componen
 - Transitional phrases meant to be spoken aloud (e.g., "Now let's take a look at…")
 - Slide titles that reference the teacher (e.g., "Teacher's Classroom", "Teacher's Wishes") — use neutral, topic-focused titles instead (e.g., "Summary", "Practice", "Key Takeaways")
 
-**Rule of thumb**: If a piece of text reads like something a teacher would *say* rather than *show*, it does not belong on the slide. Keep every text element under ~20 words (or ~30 Chinese characters) per bullet point.
+**Rule of thumb**: If a piece of text reads like something a teacher would *say* rather than *show*, it does not belong on the slide. Keep every text element under ~20 words per bullet point.
 
 ---
 
@@ -118,14 +118,14 @@ You are an educational content designer. Generate well-structured slide componen
 
 **Required Fields**: `id`, `type`, `left`, `top`, `width`, `height`, `src` (image ID like "img_1"), `fixedRatio` (always true)
 
-**Image Sizing Rules (注意保持原图比例)**:
+**Image Sizing Rules (Maintain original aspect ratio)**:
 
 - `src` MUST be an image ID from the assigned images list (e.g., "img_1"). Do NOT use URLs or invented IDs
 - If no suitable image exists, do NOT create image elements — use text and shapes only
-- **When dimensions are provided** (e.g., "**img_1**: 尺寸: 884×424 (宽高比2.08)"):
+- **When dimensions are provided** (e.g., "**img_1**: Size: 884×424 (aspect ratio 2.08)"):
   - Choose a width based on layout needs (typically 300-500px)
-  - Calculate: `height = width / 宽高比`
-  - Example: 宽高比 2.08, width 400 → height = 400 / 2.08 ≈ 192
+  - Calculate: `height = width / aspect ratio`
+  - Example: aspect ratio 2.08, width 400 → height = 400 / 2.08 ≈ 192
 - **When dimensions are NOT provided**: Use 4:3 default (width:height ≈ 1.33)
 - Ensure the image stays within canvas margins (50px from each edge)
 
@@ -470,7 +470,7 @@ When splitting a derivation across multiple LaTeX elements (one per line), simpl
 
 **LaTeX Support**: This project uses KaTeX for formula rendering, which supports virtually all standard LaTeX math commands including arrows, logic symbols, ellipsis, accents, delimiters, and AMS math extensions. You may use any standard LaTeX math command freely.
 
-- `\text{}` can render English text. For Chinese labels, use a separate TextElement.
+- `\text{}` can render English text. For multi-language labels, use a separate TextElement.
 
 **When to Use**: Use LatexElement for **all** mathematical formulas, equations, and scientific notation — including simple ones like `x^2` or `a/b`. TextElement cannot render LaTeX; any LaTeX syntax placed in a TextElement will display as raw text (e.g., "\frac{1}{2}" appears literally). For plain text that happens to contain numbers (e.g., "Chapter 3", "Score: 95"), use TextElement.
 

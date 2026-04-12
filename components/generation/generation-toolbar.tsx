@@ -89,6 +89,7 @@ export function GenerationToolbar({
   const setWebSearchProvider = useSettingsStore((s) => s.setWebSearchProvider);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [parserMode, setParserMode] = useState<string>(pdfProviderId);
 
   // Check if the selected web search provider has a valid config (API key or server-configured)
   const webSearchProvider = WEB_SEARCH_PROVIDERS[webSearchProviderId];
@@ -132,18 +133,37 @@ export function GenerationToolbar({
 
   // Document handler (supports PDF, DOCX, TXT, PPT, PPTX)
   const handleFileSelect = (file: File) => {
-    const validTypes = [
-      'application/pdf',
-      'text/plain',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    ];
-    const validExtensions = ['pdf', 'txt', 'docx', 'ppt', 'pptx'];
+    let validTypes: string[] = [];
+    let validExtensions: string[] = [];
+    
+    if (parserMode === 'unpdf') {
+      validTypes = ['application/pdf'];
+      validExtensions = ['pdf'];
+    } else if (parserMode === 'mineru') {
+      validTypes = [
+        'application/pdf',
+        'text/plain',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      ];
+      validExtensions = ['pdf', 'txt', 'docx', 'ppt', 'pptx'];
+    } else {
+      validTypes = [
+        'text/plain',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      ];
+      validExtensions = ['txt', 'docx', 'ppt', 'pptx'];
+    }
+
     const ext = file.name.toLowerCase().split('.').pop();
     
     if (!validTypes.includes(file.type) && !validExtensions.includes(ext || '')) {
-      onPdfError(t('upload.unsupportedFileType'));
+      if (parserMode === 'unpdf') onPdfError('Please upload a PDF file');
+      else if (parserMode === 'mineru') onPdfError('Please upload PDF, DOCX, TXT, PPT, or PPTX');
+      else onPdfError('Please upload DOCX, TXT, PPT, or PPTX');
       return;
     }
     
@@ -225,7 +245,12 @@ export function GenerationToolbar({
             <span className="text-xs font-medium text-muted-foreground shrink-0">
               {t('toolbar.documentParser')}
             </span>
-            <Select value={pdfProviderId} onValueChange={(v) => setPDFProvider(v as PDFProviderId)}>
+            <Select value={parserMode} onValueChange={(v) => {
+              setParserMode(v);
+              if (v !== 'others') {
+                setPDFProvider(v as PDFProviderId);
+              }
+            }}>
               <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
                 <SelectValue />
               </SelectTrigger>
@@ -250,6 +275,11 @@ export function GenerationToolbar({
                     </SelectItem>
                   );
                 })}
+                <SelectItem value="others">
+                  <div className="flex items-center gap-1.5">
+                    Others (DOCX, PPT, TXT)
+                  </div>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -260,7 +290,11 @@ export function GenerationToolbar({
               type="file"
               ref={fileInputRef}
               className="hidden"
-              accept=".pdf,.docx,.txt,.ppt,.pptx"
+              accept={
+                parserMode === 'unpdf' ? '.pdf' :
+                parserMode === 'mineru' ? '.pdf,.docx,.txt,.ppt,.pptx' :
+                '.docx,.txt,.ppt,.pptx'
+              }
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) handleFileSelect(f);
@@ -310,8 +344,12 @@ export function GenerationToolbar({
               >
                 <Paperclip className="size-5 text-muted-foreground/50 mb-1.5" />
                 <p className="text-xs font-medium">{t('toolbar.documentUpload')}</p>
-                <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                  {t('upload.documentSizeLimit')}
+                <p className="text-[10px] text-muted-foreground/60 mt-0.5 text-center px-2">
+                  {parserMode === 'unpdf'
+                    ? 'Supports PDF up to 50MB'
+                    : parserMode === 'mineru'
+                    ? 'Supports PDF, DOCX, TXT, PPT, PPTX up to 50MB'
+                    : 'Supports DOCX, TXT, PPT, PPTX up to 50MB'}
                 </p>
               </div>
             )}
