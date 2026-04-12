@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
- * When NEXT_PUBLIC_OPENMAIC_STUDENT_SITE=1 (Vercel standalone classroom deployment),
+ * When NEXT_PUBLIC_LYS_STUDENT_SITE=1 (Vercel standalone classroom deployment),
  * only the learner surface and required APIs are reachable — no editor, no teacher APIs.
  */
 export function middleware(request: NextRequest) {
-  if (process.env.NEXT_PUBLIC_OPENMAIC_STUDENT_SITE !== '1') {
+  if (process.env.NEXT_PUBLIC_LYS_STUDENT_SITE !== '1') {
     return NextResponse.next();
   }
 

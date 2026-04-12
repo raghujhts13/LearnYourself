@@ -321,7 +321,7 @@ function HomePage() {
       }
       if (shareTarget === 'vercel' && !shareServerInfo?.vercelDeployConfigured) {
         setShareError(
-          'Add VERCEL_TOKEN to .env.local on this OpenMAIC server, restart, then try again.',
+          'Add VERCEL_TOKEN to .env.local on this LYS server, restart, then try again.',
         );
         return;
       }
@@ -1005,7 +1005,7 @@ function HomePage() {
                 <div className="mb-4 p-3 rounded-xl border bg-violet-50/60 dark:bg-violet-950/30 border-violet-200/60 dark:border-violet-800/40 text-xs text-violet-900 dark:text-violet-100">
                   <p className="font-semibold mb-1">Standalone site on Vercel</p>
                   <p className="text-violet-800/90 dark:text-violet-200/85 leading-relaxed">
-                    Uploads this class and deploys a new production URL with only the student view. Your OpenMAIC
+                    Uploads this class and deploys a new production URL with only the student view. Your LYS
                     server must have{' '}
                     <code className="px-1 py-0.5 rounded bg-violet-100/80 dark:bg-violet-900/50 font-mono text-[10px]">
                       VERCEL_TOKEN
@@ -1090,7 +1090,7 @@ function HomePage() {
                   <div className="mt-2">
                     <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">
                       {shareTarget === 'custom'
-                        ? 'Public base URL for this OpenMAIC server (required)'
+                        ? 'Public base URL for this LYS server (required)'
                         : "Your server's public URL (e.g. https://192.168.1.5:3000 or https://myclassroom.com)"}
                     </label>
                     <input
@@ -1168,7 +1168,7 @@ function HomePage() {
                     ) : (
                       <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
                         This Vercel deployment only includes the student experience. Open this classroom in your
-                        local OpenMAIC app to edit or present from the professor view.
+                        local LYS app to edit or present from the professor view.
                       </p>
                     )}
                   </details>

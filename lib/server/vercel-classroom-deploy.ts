@@ -1,5 +1,5 @@
 /**
- * Stage a copy of the OpenMAIC project (minus heavy/ignored dirs) and run the Vercel CLI
+ * Stage a copy of the LYS project (minus heavy/ignored dirs) and run the Vercel CLI
  * to create a standalone student-only deployment for one classroom.
  */
 
@@ -71,7 +71,7 @@ export function parseVercelProductionUrl(cliOutput: string): string | null {
 }
 
 function sanitizeVercelProjectName(classroomId: string): string {
-  return `openmaic-${classroomId}`
+  return `LYS-${classroomId}`
     .toLowerCase()
     .replace(/[^a-z0-9._-]/g, '-')
     .replace(/-{3,}/g, '--')
@@ -79,7 +79,7 @@ function sanitizeVercelProjectName(classroomId: string): string {
 }
 
 export async function runVercelDeploy(options: {
-  /** OpenMAIC project root (contains node_modules / vercel CLI). */
+  /** LYS project root (contains node_modules / vercel CLI). */
   projectRoot: string;
   stagingDir: string;
   token: string;
@@ -88,7 +88,7 @@ export async function runVercelDeploy(options: {
   const { projectRoot, stagingDir, token, classroomId } = options;
 
   const envPairs = [
-    `NEXT_PUBLIC_OPENMAIC_STUDENT_SITE=1`,
+    `NEXT_PUBLIC_LYS_STUDENT_SITE=1`,
     `NEXT_PUBLIC_STUDENT_CLASSROOM_ID=${classroomId}`,
   ];
 
@@ -150,7 +150,7 @@ export async function runVercelDeploy(options: {
 }
 
 export async function makeStagingDir(): Promise<string> {
-  return mkdtemp(path.join(tmpdir(), 'openmaic-vercel-'));
+  return mkdtemp(path.join(tmpdir(), 'LYS-vercel-'));
 }
 
 export async function removeStagingDir(dir: string): Promise<void> {

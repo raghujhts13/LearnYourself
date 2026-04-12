@@ -354,7 +354,7 @@ db.version(11).stores({
 ### **1. Install Dependencies**
 
 ```bash
-cd d:\vibeCodeproject\openMAIC\OpenMAIC
+cd d:\vibeCodeproject\LYS\LYS
 pnpm install
 ```
 
@@ -701,7 +701,7 @@ In this implementation session, we:
 
 ## 🎓 CONCLUSION
 
-**Phase 5 represents a major milestone in the OpenMAIC project.**
+**Phase 5 represents a major milestone in the LYS project.**
 
 We've successfully transformed the application from a simple folder-based class list into a sophisticated classroom management platform with:
 

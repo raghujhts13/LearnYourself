@@ -5,7 +5,7 @@
  * Used by the publish API to stamp correct shareable links into classroom JSON.
  *
  * Priority order:
- *   1. globalThis.__openmaicTunnelUrl  — set by instrumentation.ts after tunnel starts
+ *   1. globalThis.__LYSTunnelUrl  — set by instrumentation.ts after tunnel starts
  *   2. PUBLIC_URL env var              — explicit manual override (highest static priority)
  *   3. Known cloud platform env vars  — Vercel, Railway, Fly.io, Render, Coolify, …
  *   4. Request origin fallback        — works for reverse-proxy setups, wrong for localhost
@@ -40,21 +40,21 @@ export interface PublicUrlInfo {
 // Use globalThis so multiple Next.js module instances share the same value.
 declare global {
   // eslint-disable-next-line no-var
-  var __openmaicTunnelUrl: string | null | undefined;
+  var __LYSTunnelUrl: string | null | undefined;
   // eslint-disable-next-line no-var
-  var __openmaicTunnelProvider: 'tunnel-localtunnel' | 'tunnel-ngrok' | 'tunnel-custom' | null | undefined;
+  var __LYSTunnelProvider: 'tunnel-localtunnel' | 'tunnel-ngrok' | 'tunnel-custom' | null | undefined;
 }
 
 export function getTunnelUrl(): string | null {
-  return globalThis.__openmaicTunnelUrl ?? null;
+  return globalThis.__LYSTunnelUrl ?? null;
 }
 
 export function setTunnelUrl(
   url: string | null,
   provider: 'tunnel-localtunnel' | 'tunnel-ngrok' | 'tunnel-custom' | null,
 ): void {
-  globalThis.__openmaicTunnelUrl = url;
-  globalThis.__openmaicTunnelProvider = provider;
+  globalThis.__LYSTunnelUrl = url;
+  globalThis.__LYSTunnelProvider = provider;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ export function resolvePublicUrl(requestOrigin: string): PublicUrlInfo {
       url: tunnelUrl,
       isLocal: false,
       isTunneled: true,
-      provider: globalThis.__openmaicTunnelProvider ?? 'tunnel-custom',
+      provider: globalThis.__LYSTunnelProvider ?? 'tunnel-custom',
     };
   }
 

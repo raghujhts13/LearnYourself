@@ -27,14 +27,14 @@ If your dev server (`pnpm dev`) is running, **stop it first** (Ctrl+C).
 **Option B: Via Command Line (PowerShell)**
 
 ```powershell
-cd d:\vibeCodeproject\openMAIC\OpenMAIC
+cd d:\vibeCodeproject\LYS\LYS
 Remove-Item app\page.tsx -Force
 Copy-Item app\page-classroom-based.tsx app\page.tsx
 ```
 
 **Option C: Via File Explorer**
 
-1. Navigate to `d:\vibeCodeproject\openMAIC\OpenMAIC\app`
+1. Navigate to `d:\vibeCodeproject\LYS\LYS\app`
 2. Delete `page.tsx`
 3. Copy `page-classroom-based.tsx`
 4. Rename the copy to `page.tsx`
@@ -139,7 +139,7 @@ If you see errors like "Cannot find name 'ClassroomCard'":
 
 - ✅ Check browser console
 - ✅ Look for migration message
-- ✅ Open DevTools → Application → IndexedDB → OpenMAIC → classrooms table
+- ✅ Open DevTools → Application → IndexedDB → LYS → classrooms table
 - ✅ Verify classrooms exist
 
 ---

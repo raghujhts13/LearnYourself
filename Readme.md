@@ -1,8 +1,8 @@
-# OpenMAIC
+# LYS
 
 **AI-assisted, curated e-learning authoring and classroom playback.**
 
-OpenMAIC is a learning management platform designed to help educators automatically generate structured lessons from source documents or presentation slides. By leveraging large language models (LLMs), it allows users to convert topic descriptions, PDFs, DOCX files, TXTs, or PPT/PPTX files into cohesive **scenes**—including interactive slides, quizzes, and project-based learning (PBL) flows—with integrated narration (Text-to-Speech), visuals, and an interactive presentation stage.
+LYS is a learning management platform designed to help educators automatically generate structured lessons from source documents or presentation slides. By leveraging large language models (LLMs), it allows users to convert topic descriptions, PDFs, DOCX files, TXTs, or PPT/PPTX files into cohesive **scenes**—including interactive slides, quizzes, and project-based learning (PBL) flows—with integrated narration (Text-to-Speech), visuals, and an interactive presentation stage.
 
 ## Project Goal
 Give educators a local-first, self-hostable tool to iterate on AI-generated lessons, refine content in an interactive stage UI, organize learning into Classrooms, and effortlessly share or export their materials.
@@ -48,8 +48,8 @@ Give educators a local-first, self-hostable tool to iterate on AI-generated less
 
 1. **Clone the repository** (and use this directory as your git root):
    ```bash
-   git clone https://github.com/<your-org>/openMAIC.git
-   cd openMAIC/OpenMAIC
+   git clone https://github.com/<your-org>/LYS.git
+   cd LYS/LYS
    ```
 
 2. **Install dependencies**:
@@ -80,7 +80,7 @@ pnpm start
 
 ## Modifying Models & AI Providers
 
-OpenMAIC is designed to be provider-agnostic through the Vercel AI SDK. You can change your default models and providers via your `.env.local` file or through the UI settings.
+LYS is designed to be provider-agnostic through the Vercel AI SDK. You can change your default models and providers via your `.env.local` file or through the UI settings.
 
 - **Primary LLM**: Define your primary model via `DEFAULT_MODEL` in `.env.local` (e.g., `openai:gpt-4o`).
 - **Available Providers**: Supply keys like `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_GENERATIVE_AI_API_KEY`.

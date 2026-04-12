@@ -14,11 +14,11 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
 
   // Standalone student deployments on Vercel — no tunnel
-  if (process.env.NEXT_PUBLIC_OPENMAIC_STUDENT_SITE === '1') return;
+  if (process.env.NEXT_PUBLIC_LYS_STUDENT_SITE === '1') return;
 
   // Guard against multiple registrations (Next.js may call this per worker)
-  if ((globalThis as Record<string, unknown>).__openmaicInstrumented) return;
-  (globalThis as Record<string, unknown>).__openmaicInstrumented = true;
+  if ((globalThis as Record<string, unknown>).__LYSInstrumented) return;
+  (globalThis as Record<string, unknown>).__LYSInstrumented = true;
 
   // Start tunnel asynchronously — server startup is not blocked
   try {

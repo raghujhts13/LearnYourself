@@ -1,6 +1,6 @@
-# GitHub: first push from the `OpenMAIC` folder (security checklist)
+# GitHub: first push from the `LYS` folder (security checklist)
 
-Use this folder as the **only** git root so GitHub never receives parent junk (`OpenMAIC.zip`, other projects, etc.).
+Use this folder as the **only** git root so GitHub never receives parent junk (`LYS.zip`, other projects, etc.).
 
 ## 1. What must **not** reach GitHub
 
@@ -18,10 +18,10 @@ Use this folder as the **only** git root so GitHub never receives parent junk (`
 
 ## 2. Before every `git add` / commit
 
-Run from **`OpenMAIC`** (this directory):
+Run from **`LYS`** (this directory):
 
 ```powershell
-cd d:\path\to\OpenMAIC
+cd d:\path\to\LYS
 git check-ignore -v .env.local
 ```
 
@@ -45,7 +45,7 @@ git diff --cached | Select-String -Pattern "sk-[a-zA-Z0-9]{20,}" -SimpleMatch:$f
 ## 3. First-time setup (clean repo)
 
 ```powershell
-cd d:\path\to\OpenMAIC
+cd d:\path\to\LYS
 git init
 git add .
 git status
@@ -55,10 +55,10 @@ git remote add origin https://github.com/<org-or-you>/<repo>.git
 git push -u origin main
 ```
 
-## 4. Repo root = `OpenMAIC` only
+## 4. Repo root = `LYS` only
 
-- **Do** run `git init` **inside** `OpenMAIC`.
-- **Don’t** run `git init` in the parent folder unless you carefully ignore everything except `OpenMAIC/` (easy to get wrong).
+- **Do** run `git init` **inside** `LYS`.
+- **Don’t** run `git init` in the parent folder unless you carefully ignore everything except `LYS/` (easy to get wrong).
 
 ## 5. If your branch already exists on GitHub
 
@@ -76,7 +76,7 @@ If `git merge --abort` fails:
 2. If you **can discard** all uncommitted changes:  
    `git reset --hard HEAD`  
    then `git merge --abort` (if still merging).
-3. If you **must keep** work: copy the whole `OpenMAIC` folder to a backup, then fix or re-clone.
+3. If you **must keep** work: copy the whole `LYS` folder to a backup, then fix or re-clone.
 
 ## 7. If secrets were ever committed
 

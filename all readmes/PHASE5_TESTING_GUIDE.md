@@ -11,7 +11,7 @@
 ### **Step 1: Install Dependencies**
 
 ```bash
-cd d:\vibeCodeproject\openMAIC\OpenMAIC
+cd d:\vibeCodeproject\LYS\LYS
 pnpm install
 ```
 
@@ -369,7 +369,7 @@ migrateFoldersToClassrooms()
 
 ### **Check IndexedDB**
 
-Open Chrome DevTools → Application → IndexedDB → `OpenMAIC`
+Open Chrome DevTools → Application → IndexedDB → `LYS`
 
 **Tables to inspect:**
 ```
@@ -380,7 +380,7 @@ stages - All class/stage records (check classroomId field)
 **Verify classroom creation:**
 ```javascript
 // In browser console:
-const db = await indexedDB.open('OpenMAIC');
+const db = await indexedDB.open('LYS');
 const tx = db.transaction('classrooms', 'readonly');
 const classrooms = await tx.objectStore('classrooms').getAll();
 console.log(classrooms);
@@ -587,7 +587,7 @@ localStorage.getItem('requirementDraft') // Cached requirement text
 # Clear all data and restart
 localStorage.clear()
 sessionStorage.clear()
-# Delete IndexedDB: Application → IndexedDB → OpenMAIC → Delete
+# Delete IndexedDB: Application → IndexedDB → LYS → Delete
 
 # Reinstall dependencies
 rm -rf node_modules pnpm-lock.yaml

@@ -1,4 +1,4 @@
-# OpenMAIC
+# LYS
 
 **AI-assisted, curated e-learning authoring and classroom playback.** Describe what you want to teach (optionally attach a PDF), and the app helps generate structured **scenes**—slides, quizzes, and project-based flows—with narration (**speech** actions), visuals, and an interactive **stage** for presenting or exporting.
 
@@ -17,7 +17,7 @@ This document is the **canonical project README** for GitHub and collaborators. 
 | **Approach** | Use LLMs to propose **scene outlines**, then **scene content** and **timed actions** (speech, slide effects, whiteboard ops, etc.), with optional **web search**, **PDF context**, **image generation**, and **TTS**. |
 | **Goals** | Give educators a **local-first / self-hostable** tool to iterate on AI-generated classrooms, refine in the **stage UI**, **publish or share** links, and **export** (e.g. PPTX and transcripts). |
 
-**Package name** in `package.json` is `lys-curated-elearning`; the product direction is documented here as **OpenMAIC**.
+**Package name** in `package.json` is `lys-curated-elearning`; the product direction is documented here as **LYS**.
 
 ---
 
@@ -64,8 +64,8 @@ This document is the **canonical project README** for GitHub and collaborators. 
 ## Quick start
 
 ```bash
-git clone https://github.com/<your-org>/openMAIC.git
-cd openMAIC/OpenMAIC
+git clone https://github.com/<your-org>/LYS.git
+cd LYS/LYS
 pnpm install
 cp .env.example .env.local
 # Edit .env.local — at minimum set keys for your chosen LLM provider

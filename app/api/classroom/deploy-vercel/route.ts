@@ -4,7 +4,7 @@
  * Stages this project with a single published classroom (same payload as /publish),
  * runs `npx vercel deploy`, and returns a student /learn URL on the new deployment.
  *
- * Requires VERCEL_TOKEN on the machine running OpenMAIC (typically local/self-hosted).
+ * Requires VERCEL_TOKEN on the machine running LYS (typically local/self-hosted).
  */
 
 import { type NextRequest } from 'next/server';
