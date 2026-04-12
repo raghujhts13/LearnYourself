@@ -97,9 +97,12 @@ You can also dynamically shift TTS, ASR, and Image generation settings through t
 *(Placeholder for future scope)*
 - Find a way to render and edit user PPT (instead of AI generation)
 - Classrooms and classes are web cached (should add cloud sync or some persist mechanism)
-  - [x] Vercel deploy classes 
-  - [ ] Deploy classrooms
+  - [x] deploy classes (non-editable slides but can interact)
+  - [ ] Deploy classrooms (non-editable metadata but can view all assets and interact within classes)
+  - [ ] Integrate notes within classes that can be edited inside and outside the classes
+  - [ ] Integrate a centralized journal that collates all notes inside classes belonging to a classroom
   - [ ] check if uploaded files during class generation is getting saved under materials/ assets inside classroom folders
+  - [ ] add claude web search tool and find any open-source integratable web search tools
   - [ ] update this readme file to include all the functionalities and step-by-step explanation of whats happening under the hood (or add a medium article and link it here)
 ---
 
