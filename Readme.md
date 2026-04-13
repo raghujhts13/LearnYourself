@@ -1,120 +1,137 @@
 # LYS
 
-**AI-assisted, curated e-learning authoring and classroom playback.*_ (work in progress)*_**
+**AI-assisted, local-first e-learning authoring and classroom delivery platform.**
 
-LYS is a learning management platform designed to help educators automatically generate structured lessons from source documents or presentation slides. By leveraging large language models (LLMs), it allows users to convert topic descriptions, PDFs, DOCX files, TXTs, or PPT/PPTX files into cohesive **scenes**—including interactive slides, quizzes, and project-based learning (PBL) flows—with integrated narration (Text-to-Speech), visuals, and an interactive presentation stage.
+LYS helps educators generate, edit, present, and share interactive classes from topic prompts or uploaded documents (`PDF`, `DOCX`, `TXT`, `PPT`, `PPTX`).
 
-## Project Goal
-Give educators a local-first, self-hostable tool to iterate on AI-generated lessons, refine content in an interactive stage UI, organize learning into Classrooms, and effortlessly share or export their materials.
-
----
-
-## Key Features
-
-- **Multi-Format Document Parsing:** Upload `PDF`, `DOCX`, `TXT`, `PPT`, or `PPTX` files to serve as the foundation for your lessons.
-- **Classroom-Based Data Model:** Organize your generated classes inside logical "Classrooms."
-- **Generation Modes:** Choose between **"AI Generate"** (creating from scratch using a document/topic) or **"Use My Slides"** (parsing an existing PowerPoint).
-- **Quiz Integration:** Easily toggle on/off the automated generation of assessment quizzes throughout the class.
-- **Interactive Stage:** A dynamic slide canvas featuring a whiteboard (draw, shapes, LaTeX, charts), video playback, and tools like a spotlight and laser pointer.
-- **Automated Narration (TTS/ASR):** Generate voiceovers for scenes using various TTS providers.
-- **Web Search Integration:** Enhances generation with context pulled from the web using Tavily.
+The app combines AI scene generation, media narration, live presentation controls, class note-taking, and publish/share flows in a single Next.js project.
 
 ---
 
-## Technology Stack
+## What the project currently does
 
-| Layer | Tools & Frameworks |
+### Core product flows
+- **Classroom dashboard (`/`)**: create/rename/delete classrooms, add classes, manage unclassified classes.
+- **Generation preview (`/generation-preview`)**: guided pipeline view for parsing, web research, outline creation, and first-scene generation.
+- **Professor stage (`/classroom/[id]`)**: playback controls, scene navigation, whiteboard, speaker notes, Q&A sidebar, slide editing, and export options.
+- **Student view (`/learn/[id]`)**: read-only classroom playback for published classes.
+- **Journal (`/journal`, `/journal/[classroomId]`)**: cross-classroom notes explorer with search and inline editing.
+
+### Generation and content
+- **Two generation modes**:
+  - `ai`: generate from requirements + optional source document
+  - `from-slides`: parse PPT/PPTX and derive outlines/content from uploaded slides
+- **Document parsing**: unified parser route for `PDF`, `DOCX`, `TXT`, `PPT`, `PPTX`.
+- **Web search augmentation**: Tavily or Claude web-search-backed context before outline generation.
+- **Scene types supported**: slides + interactive flows (quiz and PBL flows).
+
+### Stage and teaching UX
+- **Interactive presentation canvas** with spotlight and laser overlays.
+- **Whiteboard overlay** with draw/pan/shape/text/erase tools + history snapshots.
+- **Auto-resume generation** for pending outlines when a class is reopened.
+- **Playback persistence** (scene/action position restored from IndexedDB).
+- **Export menu**: PPTX export, resource pack export, transcript download.
+
+### Notes and journaling
+- **Per-class Notes panel** in stage (rich-text ProseMirror editor, autosave).
+- **Global Journal FAB + right drawer** available throughout the app.
+- **Journal pages** organized by classroom (chapter) and class session (section).
+
+### Publishing, sharing, and deployment
+- **Publish API**: stores classroom payload (stage/scenes/media/audio) server-side and returns share URL.
+- **Unpublish API**: removes published classroom artifacts.
+- **Public URL resolution**: detects explicit/public/tunneled base URL.
+- **Optional “Deploy to Vercel” route**: stages project and returns student `learn` URL (requires `VERCEL_TOKEN`).
+
+### Local-first storage model
+- Uses Dexie/IndexedDB for classrooms, stages, scenes, audio/media blobs, playback state, and class notes.
+- Server filesystem storage is used for published classroom artifacts and student-facing links.
+
+---
+
+## Technology stack
+
+| Layer | Tools |
 | --- | --- |
-| **Framework** | Next.js 16 (App Router), React 19 |
-| **Language** | TypeScript 5 |
-| **Styling & UI** | Tailwind CSS 4, Radix / Base UI, Motion, Lucide Icons |
-| **State Management** | Zustand (with persistence) |
-| **Local Database** | Dexie.js (IndexedDB) for storing Classrooms, Stages, and Media Blobs |
-| **AI Integration** | Vercel AI SDK (`ai`), Provider modules for OpenAI, Anthropic, Ollama, etc. |
-| **Document Parsers** | `unpdf` & `mineru` (PDF), `mammoth` (DOCX), `officeparser` (PPTX) |
-| **Export/Docs** | Custom PPTX pipeline (`pptxgenjs`), KaTeX (math), ECharts (charts) |
-| **Tooling** | pnpm workspaces, ESLint, Prettier, Vitest, Playwright |
+| Framework | Next.js 16 (App Router), React 19 |
+| Language | TypeScript 5 |
+| Styling/UI | Tailwind CSS 4, Base UI, Radix UI, Motion, Lucide, Sonner |
+| State | Zustand |
+| Local persistence | Dexie (IndexedDB) |
+| AI runtime | Vercel AI SDK (`ai`) + provider adapters |
+| LLM providers | OpenAI, Anthropic, Ollama (configured via settings/env) |
+| Document parsing | `unpdf` / `mineru` (PDF), `mammoth` (DOCX), `officeparser` (PPT/PPTX) |
+| Rich text notes | ProseMirror modules |
+| Rendering/math/charts | KaTeX, ECharts |
+| Export pipeline | Workspace `pptxgenjs` + `mathml2omml` |
+| Testing | Vitest, Playwright |
+| Tooling | pnpm workspaces, ESLint, Prettier |
 
 ---
 
-## Setup and Run Locally
+## API surface (high level)
+
+Key route groups under `app/api`:
+- `generate/*`: scene outlines/content/actions, TTS, image/video generation
+- `generate-classroom/*`: class-generation pipeline endpoints
+- `parse-document`, `parse-pdf`: source file parsing
+- `web-search`: Tavily/Claude search integration
+- `transcription`, `azure-voices`: ASR + Azure voice listing
+- `classroom`, `classroom/publish`, `classroom/deploy-vercel`: storage/share/deploy
+- `public-url`: externally reachable URL resolution
+- `verify-*`: provider/model/media verification routes
+
+---
+
+## Local setup
 
 ### Requirements
-- **Node.js** version 20.9.0 or higher.
-- **pnpm** package manager (enable via `corepack enable`).
-- **API Keys**: At minimum, an API key for your chosen LLM provider.
+- Node.js `>=20.9.0`
+- `pnpm` (recommended via `corepack enable`)
 
-### Installation Steps
+### Install and run
+```bash
+pnpm install
+cp .env.example .env.local
+pnpm dev
+```
 
-1. **Clone the repository** (and use this directory as your git root):
-   ```bash
-   git clone https://github.com/<your-org>/LYS.git
-   cd LYS/LYS
-   ```
+Open `http://localhost:3000`.
 
-2. **Install dependencies**:
-   ```bash
-   pnpm install
-   ```
-
-3. **Configure Environment Variables**:
-   Copy the example `.env` file and enter your API keys.
-   ```bash
-   cp .env.example .env.local
-   ```
-   *Note: Only add keys for the services you intend to use. At minimum, set an LLM provider key (e.g., `OPENAI_API_KEY`).*
-
-4. **Start the Development Server**:
-   ```bash
-   pnpm dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000) to view the app.
-
-### Production Build
+### Build and test
 ```bash
 pnpm build
 pnpm start
+pnpm lint
+pnpm test
+pnpm test:e2e
 ```
 
 ---
 
-## Modifying Models & AI Providers
+## Provider configuration notes
 
-LYS is designed to be provider-agnostic through the Vercel AI SDK. You can change your default models and providers via your `.env.local` file or through the UI settings.
+Most integrations are optional; configure only what you use in `.env.local` or UI Settings.
 
-- **Primary LLM**: Define your primary model via `DEFAULT_MODEL` in `.env.local` (e.g., `openai:gpt-4o`).
-- **Available Providers**: Supply keys like `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_GENERATIVE_AI_API_KEY`.
-- **Local/Air-Gapped Usage**: For self-hosted, air-gapped instances, you can point to local models by setting `OLLAMA_BASE_URL`.
-- **Text-to-Speech (TTS) & ASR**: Setup provider keys for audio handling (e.g., `TTS_OPENAI_API_KEY`, `ASR_QWEN_API_KEY`).
-- **Image Generation & Search**: You can add keys for specific service providers such as Tavily for search (`TAVILY_API_KEY`). 
+Common variables:
+- LLM: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, optional `OLLAMA_BASE_URL`
+- PDF parsing: `PDF_UNPDF_API_KEY`, `PDF_MINERU_API_KEY`
+- TTS/ASR: `TTS_*`, `ASR_*`
+- Web search: `TAVILY_API_KEY` (Claude search can use Anthropic key)
+- Sharing/deploy: `PUBLIC_URL`, tunnel vars, optional `VERCEL_TOKEN`
 
-You can also dynamically shift TTS, ASR, and Image generation settings through the application's **Settings UI** without necessarily rebooting the server.
+For full variable list and comments, see `.env.example`.
 
 ---
 
-## Future Scope / pending actions
+## Project lineage
 
-*(Placeholder for future scope)*
-- Find a way to render and edit user PPT (instead of AI generation)
-- Classrooms and classes are web cached (should add cloud sync or some persist mechanism)
-- [x] Integrate notes within classes that can be edited inside and outside the classes
-- [x] test claude web search functionality
-- [x] deploy classes (non-editable slides but can interact)
-- [x] check if uploaded files during class generation is getting saved under materials/ assets inside classroom folders
-- [ ] Allow multifile upload and parsing
-- [ ] need to test whiteboard functionality
-- [ ] Deploy classrooms (non-editable metadata but can view all assets and interact within classes)
-- [ ] Test the custom domain deployment
-- [ ] Unarchive and integrate video generation into classroom flow
-- [ ] update this readme file to include all the functionalities and step-by-step explanation of whats happening under the hood (or add a medium article and link it here)
+This project extends [OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) and adds classroom and delivery workflows specific to LYS. It also integrates the project [Puter](https://github.com/HeyPuter) for accessing frontier models for free (rate limited).
+
 ---
 
-### Project Integrations
+## Docs archive
 
-This project was built by modifying **[OpenMAIC](https://github.com/THU-MAIC/OpenMAIC)** (an open-source platform for interactive AI courses) to fit our specific needs. 
-It also uses **[Puter](https://github.com/HeyPuter)** (a cloud operating system) to allow anyone to use advanced AI models for free, though with rate limits.
+Historical implementation notes and older readmes are archived at:
 
-## Project Documentation Archive
-
-If you are looking for historical context, implementation guides, test suites, or older version readmes, all past markdown trackers have been safely archived in the directory below:  
-📂 **[Archive: All Readmes](./all%20readmes/)**
+📂 **[all readmes](./all%20readmes/)**
