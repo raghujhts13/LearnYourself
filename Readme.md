@@ -124,11 +124,9 @@ For full variable list and comments, see `.env.example`.
 
 ---
 
-## Future Scope / pending actions
+## Future Scope / pending actions (in order of priority [WIP])
 
 *(Placeholder for future scope)*
-- Find a way to render and edit user PPT (instead of AI generation)
-- Classrooms and classes are web cached (should add cloud sync or some persist mechanism)
 - [x] Integrate notes within classes that can be edited inside and outside the classes
 - [x] test claude web search functionality
 - [x] deploy classes (non-editable slides but can interact)
@@ -136,9 +134,11 @@ For full variable list and comments, see `.env.example`.
 - [ ] Connect with Wikipedia llama loader for wiki information without internet search when enabled
 - [ ] Allow multifile upload and parsing
 - [ ] Fixing the interactive slides logic and integration
+- [ ] Unarchive and integrate video generation into classroom flow
+- [ ] Find a way to render and edit user PPT (instead of AI generation)
+- [ ] Classrooms and classes are web cached (should add cloud sync or some persist mechanism)
 - [ ] Deploy classrooms (non-editable metadata but can view all assets and interact within classes)
 - [ ] Test the custom domain deployment
-- [ ] Unarchive and integrate video generation into classroom flow
 - [ ] update this readme file to include all the functionalities and step-by-step explanation of whats happening under the hood (or add a medium article and link it here)
 ---
 
