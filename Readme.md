@@ -102,6 +102,7 @@ You can also dynamically shift TTS, ASR, and Image generation settings through t
 - [x] deploy classes (non-editable slides but can interact)
 - [x] check if uploaded files during class generation is getting saved under materials/ assets inside classroom folders
 - [ ] Allow multifile upload and parsing
+- [ ] need to test whiteboard functionality
 - [ ] Deploy classrooms (non-editable metadata but can view all assets and interact within classes)
 - [ ] Test the custom domain deployment
 - [ ] Unarchive and integrate video generation into classroom flow
