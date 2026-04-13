@@ -148,8 +148,4 @@ This project extends [OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) and adds c
 
 ---
 
-## Docs archive
 
-Historical implementation notes and older readmes are archived at:
-
-📂 **[all readmes](./all%20readmes/)**
