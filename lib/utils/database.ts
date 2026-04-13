@@ -73,6 +73,8 @@ export interface StageRecord {
   sourceFileName?: string;
   sourceFileType?: string;
   generationMode?: 'ai' | 'from-slides';
+  /** Serialized Whiteboard[] JSON — auto-saved with stage */
+  whiteboard?: string;
 }
 
 /**
@@ -125,6 +127,17 @@ export interface PlaybackStateRecord {
   sceneIndex: number;
   actionIndex: number;
   updatedAt: number;
+}
+
+/**
+ * ClassNote table - Human-authored rich-text notes per class session
+ */
+export interface ClassNoteRecord {
+  stageId: string;      // Primary key (FK → stages.id)
+  classroomId: string;  // FK → classrooms.id (for batch queries)
+  content: string;      // ProseMirror document JSON
+  updatedAt: number;
+  createdAt: number;
 }
 
 /**
@@ -182,6 +195,7 @@ class MAICDatabase extends Dexie {
   mediaFiles!: EntityTable<MediaFileRecord, 'id'>;
   folders!: EntityTable<FolderRecord, 'id'>;
   classrooms!: EntityTable<ClassroomRecord, 'id'>;
+  classNotes!: EntityTable<ClassNoteRecord, 'stageId'>;
 
   constructor() {
     super(DATABASE_NAME);
@@ -334,6 +348,21 @@ class MAICDatabase extends Dexie {
       mediaFiles: 'id, stageId, [stageId+type]',
       folders: 'id, updatedAt',
       classrooms: 'id, updatedAt',
+    });
+
+    // Version 12: Add classNotes table for human-authored per-class notes
+    this.version(12).stores({
+      stages: 'id, updatedAt, folderId, classroomId',
+      scenes: 'id, stageId, order, [stageId+order]',
+      audioFiles: 'id, createdAt',
+      imageFiles: 'id, createdAt',
+      snapshots: '++id',
+      playbackState: 'stageId',
+      stageOutlines: 'stageId',
+      mediaFiles: 'id, stageId, [stageId+type]',
+      folders: 'id, updatedAt',
+      classrooms: 'id, updatedAt',
+      classNotes: 'stageId, classroomId',
     });
   }
 }

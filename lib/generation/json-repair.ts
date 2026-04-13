@@ -81,6 +81,31 @@ export function parseJsonResponse<T>(response: string): T | null {
     }
   }
 
+  // Strategy 2.5: Boundary-based extraction fallback.
+  // If quote-balanced scanning fails (e.g. model emits unescaped quotes inside HTML text),
+  // try a coarse slice from first opening token to last closing token.
+  const firstObject = response.indexOf('{');
+  const lastObject = response.lastIndexOf('}');
+  if (firstObject !== -1 && lastObject !== -1 && lastObject > firstObject) {
+    const candidate = response.slice(firstObject, lastObject + 1).trim();
+    const result = tryParseJson<T>(candidate);
+    if (result !== null) {
+      log.debug('Successfully parsed JSON using object boundary fallback');
+      return result;
+    }
+  }
+
+  const firstArray = response.indexOf('[');
+  const lastArray = response.lastIndexOf(']');
+  if (firstArray !== -1 && lastArray !== -1 && lastArray > firstArray) {
+    const candidate = response.slice(firstArray, lastArray + 1).trim();
+    const result = tryParseJson<T>(candidate);
+    if (result !== null) {
+      log.debug('Successfully parsed JSON using array boundary fallback');
+      return result;
+    }
+  }
+
   // Strategy 3: Last resort - try the whole response
   const result = tryParseJson<T>(response.trim());
   if (result !== null) {

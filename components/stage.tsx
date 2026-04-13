@@ -10,6 +10,7 @@ import { useSceneGenerator } from '@/lib/hooks/use-scene-generator';
 import { SceneSidebar } from './stage/scene-sidebar';
 import { SpeakerNotesPanel } from './stage/speaker-notes-panel';
 import { QASidebar } from './stage/qa-sidebar';
+import { ClassNotesPanel } from './stage/class-notes-panel';
 import { Header } from './header';
 import { CanvasArea } from '@/components/canvas/canvas-area';
 import { PlaybackEngine, computePlaybackView } from '@/lib/playback';
@@ -57,6 +58,7 @@ export function Stage({
   const [isSlideEditing, setIsSlideEditing] = useState(false);
   const [showSpeakerNotes, setShowSpeakerNotes] = useState(false);
   const [showQASidebar, setShowQASidebar] = useState(false);
+  const [showClassNotes, setShowClassNotes] = useState(false);
 
   // Whiteboard state (from canvas store so AI tools can open it)
   const whiteboardOpen = useCanvasStore.use.whiteboardOpen();
@@ -557,6 +559,8 @@ export function Stage({
             onToggleSpeakerNotes={() => setShowSpeakerNotes((v) => !v)}
             showQASidebar={showQASidebar}
             onToggleQASidebar={() => setShowQASidebar((v) => !v)}
+            showClassNotes={showClassNotes}
+            onToggleClassNotes={() => setShowClassNotes((v) => !v)}
           />
         )}
 
@@ -647,6 +651,15 @@ export function Stage({
           <QASidebar
             scene={currentScene}
             onClose={() => setShowQASidebar(false)}
+          />
+        )}
+
+        {/* Class Notes Panel */}
+        {showClassNotes && !isPresenting && stage?.id && (
+          <ClassNotesPanel
+            stageId={stage.id}
+            classroomId={stage.classroomId ?? ''}
+            onClose={() => setShowClassNotes(false)}
           />
         )}
       </div>

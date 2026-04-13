@@ -109,6 +109,7 @@ const VIDEO_ENV_MAP: Record<string, string> = {
 
 const WEB_SEARCH_ENV_MAP: Record<string, string> = {
   TAVILY: 'tavily',
+  ANTHROPIC: 'claude',
 };
 
 // ---------------------------------------------------------------------------
@@ -444,9 +445,19 @@ export function getServerWebSearchProviders(): Record<string, { baseUrl?: string
   return result;
 }
 
-/** Resolve Tavily API key: client key > server key > TAVILY_API_KEY env > empty */
-export function resolveWebSearchApiKey(clientKey?: string): string {
+/**
+ * Resolve web search API key for the given provider.
+ * Priority: client-supplied key > server config key > env fallback > empty.
+ */
+export function resolveWebSearchApiKey(providerId?: string, clientKey?: string): string {
   if (clientKey) return clientKey;
+  if (providerId === 'claude') {
+    const serverKey = getConfig().webSearch.claude?.apiKey;
+    if (serverKey) return serverKey;
+    // Fall back to the shared Anthropic LLM key
+    return getConfig().providers.anthropic?.apiKey || process.env.ANTHROPIC_API_KEY || '';
+  }
+  // Default: Tavily
   const serverKey = getConfig().webSearch.tavily?.apiKey;
   if (serverKey) return serverKey;
   return process.env.TAVILY_API_KEY || '';

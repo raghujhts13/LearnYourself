@@ -262,14 +262,13 @@ function GenerationPreviewContent() {
         );
 
         // Update session with parsed PDF data
-        // Keep pdfStorageKey if using from-slides mode to retain original file
-        const shouldRetainFile = currentSession.requirements.generationMode === 'from-slides';
+        // Keep pdfStorageKey so source files can be surfaced in classroom resources.
         const updatedSession = {
           ...currentSession,
           pdfText,
           pdfImages,
           imageStorageIds,
-          pdfStorageKey: shouldRetainFile ? currentSession.pdfStorageKey : undefined, // Retain for from-slides mode
+          pdfStorageKey: currentSession.pdfStorageKey,
         };
         setSession(updatedSession);
         sessionStorage.setItem('generationSession', JSON.stringify(updatedSession));
@@ -300,8 +299,15 @@ function GenerationPreviewContent() {
         setWebSearchSources([]);
 
         const wsSettings = useSettingsStore.getState();
-        const wsApiKey =
-          wsSettings.webSearchProvidersConfig?.[wsSettings.webSearchProviderId]?.apiKey;
+        const wsProviderId = wsSettings.webSearchProviderId;
+        const wsModelId = wsSettings.webSearchProvidersConfig?.[wsProviderId]?.modelId;
+        let wsApiKey = wsSettings.webSearchProvidersConfig?.[wsProviderId]?.apiKey;
+        // For Claude: fall back to the Anthropic LLM key if no dedicated web search key is set
+        if (!wsApiKey && wsProviderId === 'claude') {
+          wsApiKey =
+            (wsSettings.providersConfig as Record<string, { apiKey?: string }>)?.anthropic?.apiKey ||
+            '';
+        }
         const res = await fetch('/api/web-search', {
           method: 'POST',
           headers: getApiHeaders(),
@@ -309,6 +315,8 @@ function GenerationPreviewContent() {
             query: currentSession.requirements.requirement,
             pdfText: currentSession.pdfText || undefined,
             apiKey: wsApiKey || undefined,
+            providerId: wsProviderId,
+            modelId: wsProviderId === 'claude' ? wsModelId : undefined,
           }),
           signal,
         });

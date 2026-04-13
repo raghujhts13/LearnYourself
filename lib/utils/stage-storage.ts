@@ -106,6 +106,10 @@ export async function saveStageData(stageId: string, data: StageStoreData): Prom
       sourceFileName: data.stage.sourceFileName ?? existing?.sourceFileName,
       sourceFileType: data.stage.sourceFileType ?? existing?.sourceFileType,
       generationMode: data.stage.generationMode ?? existing?.generationMode,
+      whiteboard:
+        data.stage.whiteboard !== undefined
+          ? JSON.stringify(data.stage.whiteboard)
+          : existing?.whiteboard,
     });
 
     // Delete old scenes first to avoid orphaned data
@@ -148,8 +152,14 @@ export async function loadStageData(stageId: string): Promise<StageStoreData | n
 
     log.info(`Loaded stage: ${stageId}, scenes: ${scenes.length}`);
 
+    // Restore whiteboard from serialized JSON
+    const stageWithWhiteboard = {
+      ...stage,
+      whiteboard: stage.whiteboard ? JSON.parse(stage.whiteboard) : undefined,
+    } as unknown as import('@/lib/types/stage').Stage;
+
     return {
-      stage,
+      stage: stageWithWhiteboard,
       scenes,
       currentSceneId: stage.currentSceneId || scenes[0]?.id || null,
     };
@@ -179,13 +189,14 @@ export async function deleteStageData(stageId: string): Promise<void> {
 
     await db.transaction(
       'rw',
-      [db.stages, db.scenes, db.playbackState, db.stageOutlines, db.mediaFiles],
+      [db.stages, db.scenes, db.playbackState, db.stageOutlines, db.mediaFiles, db.classNotes],
       async () => {
         await db.stages.delete(stageId);
         await db.scenes.where('stageId').equals(stageId).delete();
         await db.playbackState.delete(stageId);
         await db.stageOutlines.delete(stageId);
         await db.mediaFiles.where('stageId').equals(stageId).delete();
+        await db.classNotes.delete(stageId);
       },
     );
 

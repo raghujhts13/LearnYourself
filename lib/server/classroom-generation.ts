@@ -18,6 +18,7 @@ import { resolveWebSearchApiKey } from '@/lib/server/provider-config';
 import { resolveModel } from '@/lib/server/resolve-model';
 import { buildSearchQuery } from '@/lib/server/search-query-builder';
 import { searchWithTavily, formatSearchResultsAsContext } from '@/lib/web-search/tavily';
+import { searchWithClaude } from '@/lib/web-search/claude';
 import { persistClassroom } from '@/lib/server/classroom-storage';
 import {
   generateMediaForClassroom,
@@ -178,24 +179,31 @@ export async function generateClassroom(
   });
 
   // Web search (optional, graceful degradation)
+  // Auto-detect provider: prefer Tavily if configured, fall back to Claude.
   let researchContext: string | undefined;
   if (input.enableWebSearch) {
-    const tavilyKey = resolveWebSearchApiKey();
-    if (tavilyKey) {
+    const tavilyKey = resolveWebSearchApiKey('tavily');
+    const claudeKey = resolveWebSearchApiKey('claude');
+    const searchProvider = tavilyKey ? 'tavily' : claudeKey ? 'claude' : null;
+
+    if (searchProvider) {
       try {
-        const searchQuery = await buildSearchQuery(requirement, pdfText, searchQueryAiCall);
+        log.info(`Running web search for classroom generation [provider=${searchProvider}]`);
 
-        log.info('Running web search for classroom generation', {
-          hasPdfContext: searchQuery.hasPdfContext,
-          rawRequirementLength: searchQuery.rawRequirementLength,
-          rewriteAttempted: searchQuery.rewriteAttempted,
-          finalQueryLength: searchQuery.finalQueryLength,
-        });
+        let searchResult;
+        if (searchProvider === 'claude') {
+          searchResult = await searchWithClaude({ query: requirement, apiKey: claudeKey! });
+        } else {
+          const searchQuery = await buildSearchQuery(requirement, pdfText, searchQueryAiCall);
+          log.info('Web search query built', {
+            hasPdfContext: searchQuery.hasPdfContext,
+            rawRequirementLength: searchQuery.rawRequirementLength,
+            rewriteAttempted: searchQuery.rewriteAttempted,
+            finalQueryLength: searchQuery.finalQueryLength,
+          });
+          searchResult = await searchWithTavily({ query: searchQuery.query, apiKey: tavilyKey! });
+        }
 
-        const searchResult = await searchWithTavily({
-          query: searchQuery.query,
-          apiKey: tavilyKey,
-        });
         researchContext = formatSearchResultsAsContext(searchResult);
         if (researchContext) {
           log.info(`Web search returned ${searchResult.sources.length} sources`);
@@ -204,7 +212,7 @@ export async function generateClassroom(
         log.warn('Web search failed, continuing without search context:', e);
       }
     } else {
-      log.warn('enableWebSearch is true but no Tavily API key configured, skipping web search');
+      log.warn('enableWebSearch is true but no web search API key configured (Tavily or Anthropic), skipping');
     }
   }
 

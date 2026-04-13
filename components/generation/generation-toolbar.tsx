@@ -26,6 +26,10 @@ import { MediaPopover } from '@/components/generation/media-popover';
 // ─── Constants ───────────────────────────────────────────────
 const MAX_PDF_SIZE_MB = 50;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
+const CLAUDE_WEB_SEARCH_MODELS = [
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' },
+  { id: 'claude-opus-4-6', name: 'Claude Opus 4.6' },
+] as const;
 
 function normalizeServerModelId(rawId: string): string {
   const trimmed = rawId.trim();
@@ -87,6 +91,7 @@ export function GenerationToolbar({
   const webSearchProviderId = useSettingsStore((s) => s.webSearchProviderId);
   const webSearchProvidersConfig = useSettingsStore((s) => s.webSearchProvidersConfig);
   const setWebSearchProvider = useSettingsStore((s) => s.setWebSearchProvider);
+  const setWebSearchProviderConfig = useSettingsStore((s) => s.setWebSearchProviderConfig);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [parserMode, setParserMode] = useState<string>(pdfProviderId);
@@ -94,10 +99,13 @@ export function GenerationToolbar({
   // Check if the selected web search provider has a valid config (API key or server-configured)
   const webSearchProvider = WEB_SEARCH_PROVIDERS[webSearchProviderId];
   const webSearchConfig = webSearchProvidersConfig[webSearchProviderId];
+  // For Claude web search: the Anthropic LLM key is also a valid fallback
+  const anthropicLLMKey = (providersConfig as Record<string, { apiKey?: string }>)?.anthropic?.apiKey;
   const webSearchAvailable = webSearchProvider
     ? !webSearchProvider.requiresApiKey ||
       !!webSearchConfig?.apiKey ||
-      !!webSearchConfig?.isServerConfigured
+      !!webSearchConfig?.isServerConfigured ||
+      (webSearchProviderId === 'claude' && !!anthropicLLMKey)
     : false;
 
   // Configured LLM providers (only those with valid credentials + models + endpoint)
@@ -368,7 +376,7 @@ export function GenerationToolbar({
               )}
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-3 space-y-3">
+          <PopoverContent align="start" className="w-72 p-3 space-y-3">
             {/* Toggle */}
             <button
               onClick={() => onWebSearchChange(!webSearch)}
@@ -411,7 +419,10 @@ export function GenerationToolbar({
                   {Object.values(WEB_SEARCH_PROVIDERS).map((provider) => {
                     const cfg = webSearchProvidersConfig[provider.id];
                     const available =
-                      !provider.requiresApiKey || !!cfg?.apiKey || !!cfg?.isServerConfigured;
+                      !provider.requiresApiKey ||
+                      !!cfg?.apiKey ||
+                      !!cfg?.isServerConfigured ||
+                      (provider.id === 'claude' && !!anthropicLLMKey);
                     return (
                       <SelectItem key={provider.id} value={provider.id} disabled={!available}>
                         <div
@@ -430,6 +441,33 @@ export function GenerationToolbar({
                 </SelectContent>
               </Select>
             </div>
+
+            {webSearchProviderId === 'claude' && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground shrink-0">
+                  Claude Model
+                </span>
+                <Select
+                  value={webSearchProvidersConfig.claude?.modelId || CLAUDE_WEB_SEARCH_MODELS[0].id}
+                  onValueChange={(value) =>
+                    setWebSearchProviderConfig('claude', {
+                      modelId: value,
+                    })
+                  }
+                >
+                  <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CLAUDE_WEB_SEARCH_MODELS.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </PopoverContent>
         </Popover>
       ) : (

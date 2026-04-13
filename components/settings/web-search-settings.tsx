@@ -3,11 +3,17 @@
 import { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import { WEB_SEARCH_PROVIDERS } from '@/lib/web-search/constants';
 import type { WebSearchProviderId } from '@/lib/web-search/types';
 import { Eye, EyeOff } from 'lucide-react';
+
+const CLAUDE_WEB_SEARCH_MODELS = [
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' },
+  { id: 'claude-opus-4-6', name: 'Claude Opus 4.6' },
+] as const;
 
 interface WebSearchSettingsProps {
   selectedProviderId: WebSearchProviderId;
@@ -42,9 +48,13 @@ export function WebSearchSettings({ selectedProviderId }: WebSearchSettingsProps
       {/* API Key + Base URL Configuration */}
       {(provider.requiresApiKey || isServerConfigured) && (
         <>
-          <div className="grid grid-cols-2 gap-4">
+          <div className={selectedProviderId === 'claude' ? 'max-w-sm' : 'grid grid-cols-2 gap-4'}>
             <div className="space-y-2">
-              <Label className="text-sm">{t('settings.webSearchApiKey')}</Label>
+              <Label className="text-sm">
+                {selectedProviderId === 'claude'
+                  ? 'Anthropic API Key'
+                  : t('settings.webSearchApiKey')}
+              </Label>
               <div className="relative">
                 <Input
                   name={`web-search-api-key-${selectedProviderId}`}
@@ -72,43 +82,82 @@ export function WebSearchSettings({ selectedProviderId }: WebSearchSettingsProps
                   {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground">{t('settings.webSearchApiKeyHint')}</p>
+              <p className="text-xs text-muted-foreground">
+                {selectedProviderId === 'claude'
+                  ? 'Enter your Anthropic API key. If ANTHROPIC_API_KEY is configured server-side, this field is optional.'
+                  : t('settings.webSearchApiKeyHint')}
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-sm">{t('settings.webSearchBaseUrl')}</Label>
-              <Input
-                name={`web-search-base-url-${selectedProviderId}`}
-                autoComplete="off"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                placeholder={provider.defaultBaseUrl || 'https://api.tavily.com'}
-                value={webSearchProvidersConfig[selectedProviderId]?.baseUrl || ''}
-                onChange={(e) =>
-                  setWebSearchProviderConfig(selectedProviderId, {
-                    baseUrl: e.target.value,
-                  })
-                }
-                className="text-sm"
-              />
-            </div>
+            {selectedProviderId === 'claude' && (
+              <div className="space-y-2 mt-4">
+                <Label className="text-sm">Claude Model</Label>
+                <Select
+                  value={
+                    webSearchProvidersConfig.claude?.modelId ||
+                    CLAUDE_WEB_SEARCH_MODELS[0].id
+                  }
+                  onValueChange={(value) =>
+                    setWebSearchProviderConfig('claude', {
+                      modelId: value,
+                    })
+                  }
+                >
+                  <SelectTrigger className="text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CLAUDE_WEB_SEARCH_MODELS.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Choose which Claude model to use for web search requests.
+                </p>
+              </div>
+            )}
+
+            {/* Base URL field: not applicable for Claude (Anthropic endpoint is fixed) */}
+            {selectedProviderId !== 'claude' && (
+              <div className="space-y-2">
+                <Label className="text-sm">{t('settings.webSearchBaseUrl')}</Label>
+                <Input
+                  name={`web-search-base-url-${selectedProviderId}`}
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder={provider.defaultBaseUrl || 'https://api.tavily.com'}
+                  value={webSearchProvidersConfig[selectedProviderId]?.baseUrl || ''}
+                  onChange={(e) =>
+                    setWebSearchProviderConfig(selectedProviderId, {
+                      baseUrl: e.target.value,
+                    })
+                  }
+                  className="text-sm"
+                />
+              </div>
+            )}
           </div>
 
-          {/* Request URL Preview */}
-          {(() => {
-            const effectiveBaseUrl =
-              webSearchProvidersConfig[selectedProviderId]?.baseUrl ||
-              provider.defaultBaseUrl ||
-              '';
-            if (!effectiveBaseUrl) return null;
-            const fullUrl = effectiveBaseUrl + '/search';
-            return (
-              <p className="text-xs text-muted-foreground break-all">
-                {t('settings.requestUrl')}: {fullUrl}
-              </p>
-            );
-          })()}
+          {/* Request URL Preview — only for providers with a configurable base URL */}
+          {selectedProviderId !== 'claude' &&
+            (() => {
+              const effectiveBaseUrl =
+                webSearchProvidersConfig[selectedProviderId]?.baseUrl ||
+                provider.defaultBaseUrl ||
+                '';
+              if (!effectiveBaseUrl) return null;
+              const fullUrl = effectiveBaseUrl + '/search';
+              return (
+                <p className="text-xs text-muted-foreground break-all">
+                  {t('settings.requestUrl')}: {fullUrl}
+                </p>
+              );
+            })()}
         </>
       )}
     </div>

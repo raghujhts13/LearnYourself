@@ -2,12 +2,13 @@
  * Web Search API
  *
  * POST /api/web-search
- * Simple JSON request/response using Tavily search.
+ * Supports Tavily (default) and Claude web search providers.
  */
 
 import { NextRequest } from 'next/server';
 import { callLLM } from '@/lib/ai/llm';
 import { searchWithTavily, formatSearchResultsAsContext } from '@/lib/web-search/tavily';
+import { searchWithClaude } from '@/lib/web-search/claude';
 import { resolveWebSearchApiKey } from '@/lib/server/provider-config';
 import { createLogger } from '@/lib/logger';
 import { apiError, apiSuccess } from '@/lib/server/api-response';
@@ -28,10 +29,14 @@ export async function POST(req: NextRequest) {
       query: requestQuery,
       pdfText,
       apiKey: clientApiKey,
+      providerId = 'tavily',
+      modelId,
     } = body as {
       query?: string;
       pdfText?: string;
       apiKey?: string;
+      providerId?: string;
+      modelId?: string;
     };
     query = requestQuery;
 
@@ -39,13 +44,13 @@ export async function POST(req: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'query is required');
     }
 
-    const apiKey = resolveWebSearchApiKey(clientApiKey);
+    const apiKey = resolveWebSearchApiKey(providerId, clientApiKey);
     if (!apiKey) {
-      return apiError(
-        'MISSING_API_KEY',
-        400,
-        'Tavily API key is not configured. Set it in Settings → Web Search or set TAVILY_API_KEY env var.',
-      );
+      const hint =
+        providerId === 'claude'
+          ? 'Anthropic API key is not configured. Set it in Settings → Web Search → Claude or set ANTHROPIC_API_KEY env var.'
+          : 'Tavily API key is not configured. Set it in Settings → Web Search or set TAVILY_API_KEY env var.';
+      return apiError('MISSING_API_KEY', 400, hint);
     }
 
     // Clamp rewrite input at the route boundary; framework body limits still apply to total request size.
@@ -72,16 +77,26 @@ export async function POST(req: NextRequest) {
       log.warn('Search query rewrite model unavailable, falling back to raw requirement:', error);
     }
 
-    const searchQuery = await buildSearchQuery(query, boundedPdfText, aiCall);
+    // Claude web search builds its own query internally; skip the rewrite step for it.
+    const isClaude = providerId === 'claude';
+    const searchQuery = isClaude
+      ? { query: query.trim(), hasPdfContext: false, rawRequirementLength: query.length, rewriteAttempted: false, finalQueryLength: query.trim().length }
+      : await buildSearchQuery(query, boundedPdfText, aiCall);
 
-    log.info('Running web search API request', {
+    log.info(`Running web search API request [provider=${providerId}]`, {
       hasPdfContext: searchQuery.hasPdfContext,
       rawRequirementLength: searchQuery.rawRequirementLength,
       rewriteAttempted: searchQuery.rewriteAttempted,
       finalQueryLength: searchQuery.finalQueryLength,
     });
 
-    const result = await searchWithTavily({ query: searchQuery.query, apiKey });
+    let result;
+    if (isClaude) {
+      result = await searchWithClaude({ query: searchQuery.query, apiKey, modelId });
+    } else {
+      result = await searchWithTavily({ query: searchQuery.query, apiKey });
+    }
+
     const context = formatSearchResultsAsContext(result);
 
     return apiSuccess({

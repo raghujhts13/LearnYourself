@@ -155,12 +155,29 @@ providers:
   });
 
   describe('resolveWebSearchApiKey', () => {
-    it('returns client key first', async () => {
+    it('returns client key first (tavily)', async () => {
       const { resolveWebSearchApiKey } = await import('@/lib/server/provider-config');
-      expect(resolveWebSearchApiKey('client-key')).toBe('client-key');
+      expect(resolveWebSearchApiKey('tavily', 'client-key')).toBe('client-key');
     });
 
-    it('falls back to TAVILY_API_KEY env var', async () => {
+    it('returns client key first (claude)', async () => {
+      const { resolveWebSearchApiKey } = await import('@/lib/server/provider-config');
+      expect(resolveWebSearchApiKey('claude', 'client-key')).toBe('client-key');
+    });
+
+    it('falls back to TAVILY_API_KEY env var for tavily', async () => {
+      vi.stubEnv('TAVILY_API_KEY', 'tvly-bare-env');
+      const { resolveWebSearchApiKey } = await import('@/lib/server/provider-config');
+      expect(resolveWebSearchApiKey('tavily')).toBe('tvly-bare-env');
+    });
+
+    it('falls back to ANTHROPIC_API_KEY env var for claude', async () => {
+      vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-bare-env');
+      const { resolveWebSearchApiKey } = await import('@/lib/server/provider-config');
+      expect(resolveWebSearchApiKey('claude')).toBe('sk-ant-bare-env');
+    });
+
+    it('falls back to TAVILY_API_KEY when called with no args', async () => {
       vi.stubEnv('TAVILY_API_KEY', 'tvly-bare-env');
       const { resolveWebSearchApiKey } = await import('@/lib/server/provider-config');
       expect(resolveWebSearchApiKey()).toBe('tvly-bare-env');

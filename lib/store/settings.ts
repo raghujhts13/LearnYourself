@@ -136,6 +136,7 @@ export interface SettingsState {
       apiKey: string;
       baseUrl: string;
       enabled: boolean;
+      modelId?: string;
       isServerConfigured?: boolean;
       serverBaseUrl?: string;
     }
@@ -232,7 +233,7 @@ export interface SettingsState {
   setWebSearchProvider: (providerId: WebSearchProviderId) => void;
   setWebSearchProviderConfig: (
     providerId: WebSearchProviderId,
-    config: Partial<{ apiKey: string; baseUrl: string; enabled: boolean }>,
+    config: Partial<{ apiKey: string; baseUrl: string; enabled: boolean; modelId: string }>,
   ) => void;
 
   // Server provider actions
@@ -313,8 +314,35 @@ const getDefaultWebSearchConfig = () => ({
   webSearchProviderId: 'tavily' as WebSearchProviderId,
   webSearchProvidersConfig: {
     tavily: { apiKey: '', baseUrl: '', enabled: true },
-  } as Record<WebSearchProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
+    claude: { apiKey: '', baseUrl: '', enabled: false, modelId: 'claude-sonnet-4-6' },
+  } as Record<
+    WebSearchProviderId,
+    { apiKey: string; baseUrl: string; enabled: boolean; modelId?: string }
+  >,
 });
+
+/**
+ * Ensure every known web search provider has an entry in webSearchProvidersConfig.
+ * Needed so newly added providers (like claude) appear after a settings migration
+ * without requiring the user to clear their persisted state.
+ */
+function ensureBuiltInWebSearchProviders(state: Partial<SettingsState>): void {
+  if (!state.webSearchProvidersConfig) return;
+  const defaults = getDefaultWebSearchConfig().webSearchProvidersConfig;
+  for (const id of Object.keys(WEB_SEARCH_PROVIDERS) as WebSearchProviderId[]) {
+    if (!state.webSearchProvidersConfig[id]) {
+      state.webSearchProvidersConfig[id] = defaults[id];
+    }
+  }
+
+  // Backfill newly introduced Claude model selection field
+  if (
+    state.webSearchProvidersConfig.claude &&
+    !state.webSearchProvidersConfig.claude.modelId
+  ) {
+    state.webSearchProvidersConfig.claude.modelId = defaults.claude.modelId;
+  }
+}
 
 /**
  * Check whether a provider ID exists in the given provider registry.
@@ -1197,11 +1225,19 @@ export const useSettingsStore = create<SettingsState>()(
               enabled: true,
               isServerConfigured: oldIsServerConfigured,
             },
+            claude: {
+              apiKey: '',
+              baseUrl: '',
+              enabled: false,
+              modelId: 'claude-sonnet-4-6',
+            },
           } as SettingsState['webSearchProvidersConfig'];
           delete stateRecord.webSearchApiKey;
           delete stateRecord.webSearchIsServerConfigured;
         }
 
+        // Ensure newly added web search providers (e.g. claude) exist in persisted config
+        ensureBuiltInWebSearchProviders(state);
         ensureValidProviderSelections(state);
 
         return state;
@@ -1213,6 +1249,7 @@ export const useSettingsStore = create<SettingsState>()(
         ensureBuiltInProviders(merged as Partial<SettingsState>);
         ensureBuiltInImageProviders(merged as Partial<SettingsState>);
         ensureBuiltInAudioProviders(merged as Partial<SettingsState>);
+        ensureBuiltInWebSearchProviders(merged as Partial<SettingsState>);
         ensureValidProviderSelections(merged as Partial<SettingsState>);
         return merged as SettingsState;
       },

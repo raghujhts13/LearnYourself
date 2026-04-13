@@ -15,6 +15,7 @@ import {
   StickyNote,
   MessageCircleQuestion,
   FileText,
+  NotebookPen,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useTheme } from '@/lib/hooks/use-theme';
@@ -35,6 +36,8 @@ interface HeaderProps {
   readonly onToggleSpeakerNotes?: () => void;
   readonly showQASidebar?: boolean;
   readonly onToggleQASidebar?: () => void;
+  readonly showClassNotes?: boolean;
+  readonly onToggleClassNotes?: () => void;
 }
 
 export function Header({
@@ -45,6 +48,8 @@ export function Header({
   onToggleSpeakerNotes,
   showQASidebar,
   onToggleQASidebar,
+  showClassNotes,
+  onToggleClassNotes,
 }: HeaderProps) {
   const { t } = useI18n();
   const { theme, setTheme } = useTheme();
@@ -143,6 +148,22 @@ export function Header({
               )}
             >
               <StickyNote className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Class Notes Toggle */}
+          {onToggleClassNotes && (
+            <button
+              onClick={onToggleClassNotes}
+              title={showClassNotes ? 'Close my notes' : 'Open my notes'}
+              className={cn(
+                'p-2 rounded-full transition-all',
+                showClassNotes
+                  ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400'
+                  : 'text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm',
+              )}
+            >
+              <NotebookPen className="w-4 h-4" />
             </button>
           )}
 
