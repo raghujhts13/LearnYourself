@@ -1,13 +1,11 @@
 # LYS
 
-**AI-assisted, curated e-learning authoring and classroom playback.**
+**AI-assisted, curated e-learning authoring and classroom playback.*_ (work in progress)*_**
 
 LYS is a learning management platform designed to help educators automatically generate structured lessons from source documents or presentation slides. By leveraging large language models (LLMs), it allows users to convert topic descriptions, PDFs, DOCX files, TXTs, or PPT/PPTX files into cohesive **scenes**—including interactive slides, quizzes, and project-based learning (PBL) flows—with integrated narration (Text-to-Speech), visuals, and an interactive presentation stage.
 
 ## Project Goal
 Give educators a local-first, self-hostable tool to iterate on AI-generated lessons, refine content in an interactive stage UI, organize learning into Classrooms, and effortlessly share or export their materials.
-
-*For a clear, non-technical overview of all features and functionalities within the application, please refer to the [Alpha Tester Guide](alpha_tester.md).*
 
 ---
 
@@ -94,22 +92,20 @@ You can also dynamically shift TTS, ASR, and Image generation settings through t
 
 ---
 
-## Future Scope
+## Future Scope / pending actions
 
 *(Placeholder for future scope)*
 - Find a way to render and edit user PPT (instead of AI generation)
 - Classrooms and classes are web cached (should add cloud sync or some persist mechanism)
-  - [x] Integrate notes within classes that can be edited inside and outside the classes
-  - [x] deploy classes (non-editable slides but can interact)
-  - [ ] Deploy classrooms (non-editable metadata but can view all assets and interact within classes)
-  - [ ] Test the custom URL deployment
-  - [ ] Allow multifile upload and parsing
-  - [ ] Integrate claude web search also as an option, and include all connector configurations for video and image generation
-  - [ ] Unarchive and integrate video generation into classroom flow
-  - [ ] Integrate a centralized journal that collates all notes inside classes belonging to a classroom
-  - [ ] check if uploaded files during class generation is getting saved under materials/ assets inside classroom folders
-  - [ ] add claude web search tool and find any open-source integratable web search tools
-  - [ ] update this readme file to include all the functionalities and step-by-step explanation of whats happening under the hood (or add a medium article and link it here)
+- [x] Integrate notes within classes that can be edited inside and outside the classes
+- [x] test claude web search functionality
+- [x] deploy classes (non-editable slides but can interact)
+- [x] check if uploaded files during class generation is getting saved under materials/ assets inside classroom folders
+- [ ] Allow multifile upload and parsing
+- [ ] Deploy classrooms (non-editable metadata but can view all assets and interact within classes)
+- [ ] Test the custom domain deployment
+- [ ] Unarchive and integrate video generation into classroom flow
+- [ ] update this readme file to include all the functionalities and step-by-step explanation of whats happening under the hood (or add a medium article and link it here)
 ---
 
 ### Project Integrations
