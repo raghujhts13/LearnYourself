@@ -58,14 +58,21 @@ export async function copyProjectForVercelStaging(destDir: string, projectRoot: 
 }
 
 export function parseVercelProductionUrl(cliOutput: string): string | null {
-  const productionLine = cliOutput.match(/Production:\s*(https:\/\/[^\s\]]+)/i);
+  // Strip ANSI escape codes — Vercel CLI wraps URLs in color codes which break regex matching
+  const clean = cliOutput.replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '');
+
+  // Primary: explicit "Production:" label in the CLI output
+  const productionLine = clean.match(/Production:\s*(https:\/\/[^\s\]]+)/i);
   if (productionLine?.[1]) return productionLine[1].replace(/\/+$/, '');
 
-  const all = cliOutput.match(/https:\/\/[^\s]+\.vercel\.app/g);
-  if (all?.length) return all[all.length - 1]!.replace(/\/+$/, '');
-
-  const anyHttps = cliOutput.match(/https:\/\/[^\s]+\.vercel\.app[^\s]*/gi);
-  if (anyHttps?.length) return anyHttps[anyHttps.length - 1]!.replace(/\/+$/, '');
+  // Fallback: collect all .vercel.app URLs and prefer the shortest one.
+  // Production alias:  https://project-name.vercel.app          (no hash → shorter)
+  // Deployment URL:    https://project-name-abc123def.vercel.app (hash appended → longer)
+  const all = clean.match(/https:\/\/[^\s\]]+\.vercel\.app/g);
+  if (all?.length) {
+    const sorted = [...all].map((u) => u.replace(/\/+$/, '')).sort((a, b) => a.length - b.length);
+    return sorted[0]!;
+  }
 
   return null;
 }
@@ -116,6 +123,7 @@ export async function runVercelDeploy(options: {
         ...process.env,
         VERCEL_TOKEN: token,
         CI: '1',
+        NO_COLOR: '1',
       },
       shell: true,
     });
