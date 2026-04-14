@@ -16,7 +16,7 @@ Here is a plain-English breakdown of every single functionality you’ll be test
 
 ### 3. The Two Magic "Generation Modes"
 * **"AI Generate" Mode:** Tell the platform a topic, or point it to a document you uploaded, and the AI will build an *entire, cohesive lesson from scratch*. It will break down the topic logically, write the script, and create the visual scenes for you.
-* **"Use My Slides" Mode:** Have an existing PowerPoint that you like? Import it directly. The platform won't overwrite your work; instead, it will parse your existing slides and upgrade them into our interactive format.
+* **"Use My Slides" Mode (Rolled back for now):** Have an existing PowerPoint that you like? Import it directly. The platform won't overwrite your work; instead, it will parse your existing slides and upgrade them into our interactive format.
 * **Live Web Research:** If your lesson needs up-to-date, real-world context, the AI has "Web Search Integration." It connects to the actual internet to inject real-time facts into the lesson it builds for you.
 
 ### 4. Automated Assessments & Quizzes
@@ -26,14 +26,15 @@ Here is a plain-English breakdown of every single functionality you’ll be test
 Once your lesson is generated, you manage it on what we call the "Stage." This isn't just a static slideshow.
 * **Dynamic Whiteboard:** You can draw on the slides during playback, stamp shapes, and insert live, data-driven charts. 
 * **Advanced Content:** Are you teaching math or science? You can insert complex math formulas natively.
-* **Rich Media:** You can seamlessly embed and play videos right inside the canvas.
-* **Presenter Tools:** To guide the viewer’s eye, the Stage includes tools like a "Spotlight" (darkening the screen except for one area) and a digital "Laser Pointer."
+* **Rich Media (WIP):** You can seamlessly embed and play videos right inside the canvas.
+* **Presenter Tools:** To guide the viewer’s eye, the Stage includes tools like a "Spotlight" (darkening the screen except for one area).
 
 ### 6. Automated Narration (The AI Voice Actor)
 * **Text-to-Speech Voiceovers:** You do not need to stand in a sound booth and record yourself. The platform reads the script on each slide and generates incredibly realistic, customizable voiceovers for your scenes. It essentially acts as the narrator for your curriculum.
 
 ### 7. Multi-Language Accessibility
-* **Translations:** The platform supports language translation capabilities, allowing education to transcend language barriers. This will be an ongoing feature we want you to test for accessibility.
+* **Language Selection:** You can select the language for the generated content and narration.
+* **Translations (rolled back for now):** The platform supports language translation capabilities, allowing education to transcend language barriers isndide classes. This will be an ongoing feature we want you to test for accessibility.
 
 ### 8. Easy Exports
 * **Take It With You:** Even though LYS is an advanced platform, we don't hold your content hostage. After you use the AI to build your dream lesson, you can export it outwards as a traditional PowerPoint (`.pptx`) file to send to colleagues or play strictly offline.
