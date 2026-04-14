@@ -1,6 +1,6 @@
 'use client';
 
-import { MoreVertical, FolderInput, FolderMinus, Trash2 } from 'lucide-react';
+import { MoreVertical, FolderInput, FolderMinus, Trash2, Share2 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 import type { StageListItem, ClassroomRecord } from '@/lib/utils/stage-storage';
@@ -23,9 +23,10 @@ interface ClassCardProps {
   onMove: (stageId: string, targetClassroomId: string | null) => void;
   onClick: () => void;
   onDelete?: (stageId: string) => void;
+  onShare?: (stageId: string, publishedUrl?: string) => void;
 }
 
-export function ClassCard({ cls, classrooms, onMove, onClick, onDelete }: ClassCardProps) {
+export function ClassCard({ cls, classrooms, onMove, onClick, onDelete, onShare }: ClassCardProps) {
   const { t } = useI18n();
   const isUnassigned = !cls.classroomId;
 
@@ -83,6 +84,22 @@ export function ClassCard({ cls, classrooms, onMove, onClick, onDelete }: ClassC
                   >
                     <FolderMinus className="w-4 h-4" />
                     <span>Unclassified</span>
+                  </DropdownMenuItem>
+                </>
+              )}
+
+              {onShare && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => onShare(cls.id, cls.publishedUrl)}
+                    className="gap-2"
+                  >
+                    <Share2 className="w-4 h-4 text-violet-500" />
+                    <span>Share</span>
+                    {cls.publishedUrl && (
+                      <span className="ml-auto text-[10px] text-green-600 dark:text-green-400 font-medium">Published</span>
+                    )}
                   </DropdownMenuItem>
                 </>
               )}

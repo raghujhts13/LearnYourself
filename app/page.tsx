@@ -26,6 +26,7 @@ import { CreateClassroomDialog } from '@/components/home/CreateClassroomDialog';
 import { ClassroomCard } from '@/components/home/ClassroomCard';
 import { CreateClassDialog } from '@/components/home/CreateClassDialog';
 import { ClassCard } from '@/components/home/ClassCard';
+import { ShareDialog } from '@/components/home/ShareDialog';
 import { toast } from 'sonner';
 
 const MIGRATION_DONE_KEY = 'classroomMigrationDone';
@@ -51,6 +52,8 @@ export default function ClassroomBasedHomePage() {
   const [selectedClassroomId, setSelectedClassroomId] = useState<string | null>(null);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [renamingClassroom, setRenamingClassroom] = useState<ClassroomRecord | null>(null);
+  const [shareStageId, setShareStageId] = useState<string | null>(null);
+  const [sharePublishedUrl, setSharePublishedUrl] = useState<string | null>(null);
 
   // Load classrooms
   const loadClassrooms = async () => {
@@ -95,6 +98,11 @@ export default function ClassroomBasedHomePage() {
       console.error('Failed to move class:', err);
       toast.error('Failed to move class');
     }
+  };
+
+  const handleShare = (stageId: string, publishedUrl?: string) => {
+    setShareStageId(stageId);
+    setSharePublishedUrl(publishedUrl ?? null);
   };
 
   const handleDeleteClass = async (stageId: string) => {
@@ -376,6 +384,7 @@ export default function ClassroomBasedHomePage() {
                       classrooms={classrooms}
                       onMove={handleMoveUnassignedClass}
                       onDelete={handleDeleteClass}
+                      onShare={handleShare}
                       onClick={() => router.push(`/classroom/${cls.id}`)}
                     />
                   </motion.div>
@@ -452,6 +461,13 @@ export default function ClassroomBasedHomePage() {
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         initialSection={settingsSection}
+      />
+
+      <ShareDialog
+        stageId={shareStageId}
+        publishedUrl={sharePublishedUrl}
+        onClose={() => setShareStageId(null)}
+        onPublished={loadClassrooms}
       />
     </div>
   );

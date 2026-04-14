@@ -15,6 +15,7 @@ import type { ClassroomRecord, StageListItem } from '@/lib/utils/stage-storage';
 import { CreateClassDialog } from '@/components/home/CreateClassDialog';
 import { ClassroomFilesPanel } from '@/components/home/ClassroomFilesPanel';
 import { ClassCard } from '@/components/home/ClassCard';
+import { ShareDialog } from '@/components/home/ShareDialog';
 import { toast } from 'sonner';
 
 export default function ClassroomDetailPage() {
@@ -28,6 +29,8 @@ export default function ClassroomDetailPage() {
   const [allClassrooms, setAllClassrooms] = useState<ClassroomRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [createClassOpen, setCreateClassOpen] = useState(false);
+  const [shareStageId, setShareStageId] = useState<string | null>(null);
+  const [sharePublishedUrl, setSharePublishedUrl] = useState<string | null>(null);
 
   useEffect(() => {
     loadClassroom();
@@ -69,6 +72,11 @@ export default function ClassroomDetailPage() {
       console.error('Failed to move class:', error);
       toast.error('Failed to move class');
     }
+  };
+
+  const handleShare = (stageId: string, publishedUrl?: string) => {
+    setShareStageId(stageId);
+    setSharePublishedUrl(publishedUrl ?? null);
   };
 
   const handleDeleteClass = async (stageId: string) => {
@@ -167,6 +175,7 @@ export default function ClassroomDetailPage() {
                 classrooms={allClassrooms}
                 onMove={handleMoveClass}
                 onDelete={handleDeleteClass}
+                onShare={handleShare}
                 onClick={() => router.push(`/classroom/${cls.id}`)}
               />
             ))}
@@ -179,6 +188,14 @@ export default function ClassroomDetailPage() {
         open={createClassOpen}
         onOpenChange={setCreateClassOpen}
         classroomId={classroomId}
+      />
+
+      {/* Share dialog */}
+      <ShareDialog
+        stageId={shareStageId}
+        publishedUrl={sharePublishedUrl}
+        onClose={() => setShareStageId(null)}
+        onPublished={loadClassroom}
       />
     </div>
   );
