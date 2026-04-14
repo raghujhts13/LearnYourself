@@ -1,4 +1,4 @@
-# Contributing to OpenMAIC
+# Contributing to LearnYourself
 
 Thanks for stopping by! To ensure a consistent and efficient workflow for everyone, please follow these guidelines when contributing to LearnYourself.
 
