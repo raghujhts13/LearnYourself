@@ -129,22 +129,20 @@ For full variable list and comments, see `.env.example`.
 *(Placeholder for future scope)*
 - [x] Integrate notes within classes that can be edited inside and outside the classes
 - [x] test claude web search functionality
-- [x] deploy classes (non-editable slides but can interact)
+- [x] Allow multifile upload and parsing
 - [x] check if uploaded files during class generation is getting saved under materials/ assets inside classroom folders
 - [ ] Connect with Wikipedia llama loader for wiki information without internet search when enabled
-- [ ] Allow multifile upload and parsing
-- [ ] Fixing the interactive slides logic and integration
 - [ ] Unarchive and integrate video generation into classroom flow
 - [ ] Find a way to render and edit user PPT (instead of AI generation)
+- [ ] Deploy classrooms and classes with all AI features enabled
 - [ ] Classrooms and classes are web cached (should add cloud sync or some persist mechanism)
-- [ ] Deploy classrooms (non-editable metadata but can view all assets and interact within classes)
 - [ ] Test the custom domain deployment
 - [ ] update this readme file to include all the functionalities and step-by-step explanation of whats happening under the hood (or add a medium article and link it here)
 ---
 
 ## Project lineage
 
-This project extends [OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) and adds classroom and delivery workflows specific to LYS. It also integrates the project [Puter](https://github.com/HeyPuter) for accessing frontier models for free (rate limited).
+This project extends [OpenMAIC](https://github.com/THU-MAIC/OpenMAIC) and adds classroom and delivery workflows specific to LYS. It also integrates the project [Puter](https://github.com/HeyPuter) since it is interesting.
 
 ---
 

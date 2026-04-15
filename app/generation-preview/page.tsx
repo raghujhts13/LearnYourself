@@ -126,173 +126,213 @@ function GenerationPreviewContent() {
       // Compute active steps for this session (recomputed after session mutations)
       let activeSteps = getActiveSteps(currentSession);
 
-      // Determine if we need the PDF analysis step
-      const fileName = currentSession.pdfFileName?.toLowerCase();
-      const isPdfSourceFile = fileName ? fileName.endsWith('.pdf') : true;
       const isFromSlidesMode = currentSession.requirements.generationMode === 'from-slides';
-      const isPptFile = fileName
-        ? fileName.endsWith('.ppt') || fileName.endsWith('.pptx')
-        : false;
-      // PPT files in from-slides mode are parsed via /api/parse-document (not the PDF path)
-      const hasPptToParseForSlides = isFromSlidesMode && isPptFile && !!currentSession.pdfStorageKey;
-      const shouldSkipPdfAnalysis =
-        currentSession.requirements.generationMode === 'from-slides' || !isPdfSourceFile;
-      const hasPdfToAnalyze =
-        !!currentSession.pdfStorageKey && !currentSession.pdfText && !shouldSkipPdfAnalysis;
 
-      if (shouldSkipPdfAnalysis && currentSession.pdfStorageKey && !hasPptToParseForSlides) {
-        log.debug('Skipping PDF analysis for non-PDF or from-slides source file', {
-          generationMode: currentSession.requirements.generationMode,
-          fileName: currentSession.pdfFileName,
-        });
-      }
-      // If no PDF to analyze, skip to the next available step
-      if (!hasPdfToAnalyze) {
+      // ── Normalize file list (multi-file aware, backward-compatible) ──
+      type SourceFileEntry = import('./types').SourceFileEntry;
+      const filesToProcess: SourceFileEntry[] =
+        currentSession.sourceFiles && currentSession.sourceFiles.length > 0
+          ? currentSession.sourceFiles
+          : currentSession.pdfStorageKey
+          ? [
+              {
+                storageKey: currentSession.pdfStorageKey,
+                fileName: currentSession.pdfFileName || 'document',
+                providerId: currentSession.pdfProviderId,
+                providerConfig: currentSession.pdfProviderConfig,
+              },
+            ]
+          : [];
+
+      const hasFilesToProcess = filesToProcess.length > 0 && !currentSession.pdfText;
+
+      if (!hasFilesToProcess) {
         const firstNonPdfIdx = activeSteps.findIndex((s) => s.id !== 'pdf-analysis');
         setCurrentStepIndex(Math.max(0, firstNonPdfIdx));
       }
 
-      // Step 0: Parse PDF if needed
-      if (hasPdfToAnalyze) {
-        log.debug('=== Generation Preview: Parsing PDF ===');
-        const pdfBlob = await loadPdfBlob(currentSession.pdfStorageKey!);
-        if (!pdfBlob) {
-          throw new Error(t('generation.pdfLoadFailed'));
+      // Accumulators across all files
+      let mergedText = '';
+      const mergedRawImages: Array<{
+        id: string; src: string; pageNumber: number;
+        description?: string; width?: number; height?: number;
+      }> = [];
+      let pptDerivedOutlines: SceneOutline[] | null = null;
+      const warnings: string[] = [];
+
+      // ── Step 0: Parse all source files ──
+      if (hasFilesToProcess) {
+        log.debug(`=== Generation Preview: Parsing ${filesToProcess.length} file(s) ===`);
+        const pdfAnalysisIdx = activeSteps.findIndex((s) => s.id === 'pdf-analysis');
+        if (pdfAnalysisIdx >= 0) setCurrentStepIndex(pdfAnalysisIdx);
+
+        for (let fi = 0; fi < filesToProcess.length; fi++) {
+          const srcFile = filesToProcess[fi];
+          const name = srcFile.fileName;
+          const ext = name.toLowerCase().split('.').pop() ?? '';
+          const isPdf = ext === 'pdf';
+          const isPpt = ext === 'ppt' || ext === 'pptx';
+
+          if (filesToProcess.length > 1) {
+            setStatusMessage(`Parsing file ${fi + 1} of ${filesToProcess.length}: ${name}`);
+          }
+
+          const blob = await loadPdfBlob(srcFile.storageKey);
+          if (!blob || !(blob instanceof Blob) || blob.size === 0) {
+            log.warn(`Skipping file "${name}": blob not found or empty`);
+            continue;
+          }
+
+          // ── PDF files in AI mode → parse-pdf (text + images) ──
+          if (isPdf && !isFromSlidesMode) {
+            const mimeType = 'application/pdf';
+            const fileObj = new File([blob], name, { type: mimeType });
+            const fd = new FormData();
+            fd.append('pdf', fileObj);
+            if (srcFile.providerId) fd.append('providerId', srcFile.providerId);
+            if (srcFile.providerConfig?.apiKey?.trim())
+              fd.append('apiKey', srcFile.providerConfig.apiKey!);
+            if (srcFile.providerConfig?.baseUrl?.trim())
+              fd.append('baseUrl', srcFile.providerConfig.baseUrl!);
+
+            const res = await fetch('/api/parse-pdf', { method: 'POST', body: fd, signal });
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({}));
+              throw new Error(errData.error || t('generation.pdfParseFailed'));
+            }
+            const result = await res.json();
+            if (!result.success || !result.data) throw new Error(t('generation.pdfParseFailed'));
+
+            const fileText: string = result.data.text ?? '';
+            if (mergedText && fileText) mergedText += `\n\n--- ${name} ---\n\n`;
+            mergedText += fileText;
+
+            if (fileText.length > MAX_PDF_CONTENT_CHARS) {
+              warnings.push(t('generation.textTruncated', { n: MAX_PDF_CONTENT_CHARS }));
+            }
+
+            const rawImgs = result.data.metadata?.pdfImages;
+            const fileImages = rawImgs
+              ? rawImgs.map(
+                  (img: { id: string; src?: string; pageNumber?: number; description?: string; width?: number; height?: number }) => ({
+                    id: img.id, src: img.src || '', pageNumber: img.pageNumber || 1,
+                    description: img.description, width: img.width, height: img.height,
+                  }),
+                )
+              : (result.data.images as string[]).map((src: string, i: number) => ({
+                  id: `img_${fi}_${i + 1}`, src, pageNumber: 1,
+                }));
+            mergedRawImages.push(...fileImages);
+
+          // ── PPT/PPTX in from-slides mode → parse-document (slides) ──
+          } else if (isPpt && isFromSlidesMode) {
+            const mimeType =
+              ext === 'ppt'
+                ? 'application/vnd.ms-powerpoint'
+                : 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+            const fileObj = new File([blob], name, { type: mimeType });
+            const fd = new FormData();
+            fd.append('file', fileObj);
+
+            const res = await fetch('/api/parse-document', { method: 'POST', body: fd, signal });
+            if (res.ok) {
+              const result = await res.json();
+              if (result.success && result.data?.slides?.length > 0) {
+                const outlines = buildOutlinesFromPptSlides(
+                  result.data.slides,
+                  currentSession.requirements.language,
+                  currentSession.requirements.includeQuizzes ?? false,
+                );
+                log.debug(`Built ${outlines.length} outlines from "${name}"`);
+                pptDerivedOutlines = [...(pptDerivedOutlines ?? []), ...outlines];
+              }
+              // Also absorb text as context
+              if (result.data?.text) {
+                if (mergedText) mergedText += `\n\n--- ${name} ---\n\n`;
+                mergedText += result.data.text as string;
+              }
+            } else {
+              log.warn(`Failed to parse PPT "${name}" for slides`);
+            }
+
+          // ── All other files (DOCX, TXT, PPT in AI mode, PDF in from-slides mode) → parse-document (text) ──
+          } else if (!isPdf || isFromSlidesMode) {
+            let mimeType = 'application/octet-stream';
+            if (isPdf) mimeType = 'application/pdf';
+            else if (ext === 'docx')
+              mimeType =
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+            else if (ext === 'txt') mimeType = 'text/plain';
+            else if (isPpt)
+              mimeType =
+                ext === 'ppt'
+                  ? 'application/vnd.ms-powerpoint'
+                  : 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+
+            const fileObj = new File([blob], name, { type: mimeType });
+            const fd = new FormData();
+            fd.append('file', fileObj);
+
+            const res = await fetch('/api/parse-document', { method: 'POST', body: fd, signal });
+            if (res.ok) {
+              const result = await res.json();
+              if (result.success && result.data?.text) {
+                if (mergedText) mergedText += `\n\n--- ${name} ---\n\n`;
+                mergedText += result.data.text as string;
+              }
+            } else {
+              log.warn(`Failed to parse document "${name}"`);
+            }
+          }
         }
 
-        // Ensure pdfBlob is a valid Blob with content
-        if (!(pdfBlob instanceof Blob) || pdfBlob.size === 0) {
-          log.error('Invalid PDF blob:', {
-            type: typeof pdfBlob,
-            size: pdfBlob instanceof Blob ? pdfBlob.size : 'N/A',
-          });
-          throw new Error(t('generation.pdfLoadFailed'));
+        // Re-number image IDs to avoid collisions across files
+        mergedRawImages.forEach((img, i) => { img.id = `img_${i + 1}`; });
+
+        // Truncate combined text
+        if (mergedText.length > MAX_PDF_CONTENT_CHARS) {
+          mergedText = mergedText.substring(0, MAX_PDF_CONTENT_CHARS);
+          if (!warnings.some((w) => w.includes('truncated')))
+            warnings.push(t('generation.textTruncated', { n: MAX_PDF_CONTENT_CHARS }));
+        }
+        if (mergedRawImages.length > MAX_VISION_IMAGES) {
+          warnings.push(
+            t('generation.imageTruncated', {
+              total: mergedRawImages.length,
+              max: MAX_VISION_IMAGES,
+            }),
+          );
         }
 
-        // Wrap as a File to guarantee multipart/form-data with correct content-type
-        const pdfFile = new File([pdfBlob], currentSession.pdfFileName || 'document.pdf', {
-          type: 'application/pdf',
-        });
+        // Store images
+        const imageStorageIds = await storeImages(mergedRawImages);
+        const pdfImages: PdfImage[] = mergedRawImages.map((img, i) => ({
+          id: img.id,
+          src: '',
+          pageNumber: img.pageNumber,
+          description: img.description,
+          width: img.width,
+          height: img.height,
+          storageId: imageStorageIds[i],
+        }));
 
-        const parseFormData = new FormData();
-        parseFormData.append('pdf', pdfFile);
-
-        if (currentSession.pdfProviderId) {
-          parseFormData.append('providerId', currentSession.pdfProviderId);
-        }
-        if (currentSession.pdfProviderConfig?.apiKey?.trim()) {
-          parseFormData.append('apiKey', currentSession.pdfProviderConfig.apiKey);
-        }
-        if (currentSession.pdfProviderConfig?.baseUrl?.trim()) {
-          parseFormData.append('baseUrl', currentSession.pdfProviderConfig.baseUrl);
-        }
-
-        const parseResponse = await fetch('/api/parse-pdf', {
-          method: 'POST',
-          body: parseFormData,
-          signal,
-        });
-
-        if (!parseResponse.ok) {
-          const errorData = await parseResponse.json();
-          throw new Error(errorData.error || t('generation.pdfParseFailed'));
-        }
-
-        const parseResult = await parseResponse.json();
-        if (!parseResult.success || !parseResult.data) {
-          throw new Error(t('generation.pdfParseFailed'));
-        }
-
-        let pdfText = parseResult.data.text as string;
-
-        // Truncate if needed
-        if (pdfText.length > MAX_PDF_CONTENT_CHARS) {
-          pdfText = pdfText.substring(0, MAX_PDF_CONTENT_CHARS);
-        }
-
-        // Create image metadata and store images
-        // Prefer metadata.pdfImages (both parsers now return this)
-        const rawPdfImages = parseResult.data.metadata?.pdfImages;
-        const images = rawPdfImages
-          ? rawPdfImages.map(
-              (img: {
-                id: string;
-                src?: string;
-                pageNumber?: number;
-                description?: string;
-                width?: number;
-                height?: number;
-              }) => ({
-                id: img.id,
-                src: img.src || '',
-                pageNumber: img.pageNumber || 1,
-                description: img.description,
-                width: img.width,
-                height: img.height,
-              }),
-            )
-          : (parseResult.data.images as string[]).map((src: string, i: number) => ({
-              id: `img_${i + 1}`,
-              src,
-              pageNumber: 1,
-            }));
-
-        const imageStorageIds = await storeImages(images);
-
-        const pdfImages: PdfImage[] = images.map(
-          (
-            img: {
-              id: string;
-              src: string;
-              pageNumber: number;
-              description?: string;
-              width?: number;
-              height?: number;
-            },
-            i: number,
-          ) => ({
-            id: img.id,
-            src: '',
-            pageNumber: img.pageNumber,
-            description: img.description,
-            width: img.width,
-            height: img.height,
-            storageId: imageStorageIds[i],
-          }),
-        );
-
-        // Update session with parsed PDF data
-        // Keep pdfStorageKey so source files can be surfaced in classroom resources.
         const updatedSession = {
           ...currentSession,
-          pdfText,
+          pdfText: mergedText,
           pdfImages,
           imageStorageIds,
-          pdfStorageKey: currentSession.pdfStorageKey,
         };
         setSession(updatedSession);
         sessionStorage.setItem('generationSession', JSON.stringify(updatedSession));
 
-        // Truncation warnings
-        const warnings: string[] = [];
-        if ((parseResult.data.text as string).length > MAX_PDF_CONTENT_CHARS) {
-          warnings.push(t('generation.textTruncated', { n: MAX_PDF_CONTENT_CHARS }));
-        }
-        if (images.length > MAX_VISION_IMAGES) {
-          warnings.push(
-            t('generation.imageTruncated', { total: images.length, max: MAX_VISION_IMAGES }),
-          );
-        }
-        if (warnings.length > 0) {
-          setTruncationWarnings(warnings);
-        }
+        if (warnings.length > 0) setTruncationWarnings(warnings);
 
-        // Reassign local reference for subsequent steps
         currentSession = updatedSession;
         activeSteps = getActiveSteps(currentSession);
+        setStatusMessage('');
       }
 
-      // Step: Web Search (if enabled)
+      // ── Step: Web Search (if enabled) ──
       const webSearchStepIdx = activeSteps.findIndex((s) => s.id === 'web-search');
       if (currentSession.requirements.webSearch && webSearchStepIdx >= 0) {
         setCurrentStepIndex(webSearchStepIdx);
@@ -382,49 +422,8 @@ function GenerationPreviewContent() {
 
       const settings = useSettingsStore.getState();
 
-      // ── Parse PPT for from-slides mode ──
-      // Build outlines directly from the PPT slides — no AI involved.
-      let pptDerivedOutlines: SceneOutline[] | null = null;
-      if (hasPptToParseForSlides) {
-        log.debug('=== from-slides mode: parsing PPT ===');
-        const pptBlob = await loadPdfBlob(currentSession.pdfStorageKey!);
-        if (pptBlob instanceof Blob && pptBlob.size > 0) {
-          const ext = isPptFile && fileName?.endsWith('.ppt') ? '.ppt' : '.pptx';
-          const mimeType =
-            ext === '.ppt'
-              ? 'application/vnd.ms-powerpoint'
-              : 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-          const pptFile = new File(
-            [pptBlob],
-            currentSession.pdfFileName || `presentation${ext}`,
-            { type: mimeType },
-          );
-          const parseFormData = new FormData();
-          parseFormData.append('file', pptFile);
-
-          const parseResp = await fetch('/api/parse-document', {
-            method: 'POST',
-            body: parseFormData,
-            signal,
-          });
-
-          if (parseResp.ok) {
-            const parseResult = await parseResp.json();
-            if (parseResult.success && parseResult.data?.slides?.length > 0) {
-              pptDerivedOutlines = buildOutlinesFromPptSlides(
-                parseResult.data.slides,
-                currentSession.requirements.language,
-                currentSession.requirements.includeQuizzes ?? false,
-              );
-              log.debug(
-                `Built ${pptDerivedOutlines.length} outlines from ${parseResult.data.slides.length} PPT slides`,
-              );
-            }
-          }
-        }
-        if (!pptDerivedOutlines || pptDerivedOutlines.length === 0) {
-          log.warn('No slides extracted from PPT; falling back to AI outline generation');
-        }
+      if (isFromSlidesMode && (!pptDerivedOutlines || pptDerivedOutlines.length === 0)) {
+        log.warn('No slides extracted from any PPT file; falling back to AI outline generation');
       }
 
       // ── Generate outlines ──

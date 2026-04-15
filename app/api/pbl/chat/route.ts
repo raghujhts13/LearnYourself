@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'agent with system_prompt is required');
     }
 
-    const { model: languageModel } = resolveModelFromHeaders(req);
+    const { model: languageModel } = await resolveModelFromHeaders(req);
 
     // Start with the agent's own system prompt
     let systemPrompt = agent.system_prompt;
