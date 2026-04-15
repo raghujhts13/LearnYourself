@@ -9,7 +9,7 @@ import { db } from '@/lib/utils/database';
 import type { SceneOutline, PdfImage, ImageMapping } from '@/lib/types/generation';
 import type { Scene, SceneType } from '@/lib/types/stage';
 import type { SpeechAction } from '@/lib/types/action';
-import { splitLongSpeechActions } from '@/lib/audio/tts-utils';
+import { getSceneSpeakableActionsForTTS } from '@/lib/audio/tts-utils';
 import { generateMediaForOutlines } from '@/lib/media/media-orchestrator';
 import { buildSlideContentFromOutline } from '@/lib/generation/ppt-slide-content-builder';
 import { createLogger } from '@/lib/logger';
@@ -189,7 +189,7 @@ async function generateTTSForScene(
   signal?: AbortSignal,
 ): Promise<{ success: boolean; failedCount: number; error?: string }> {
   const providerId = useSettingsStore.getState().ttsProviderId;
-  scene.actions = splitLongSpeechActions(scene.actions || [], providerId);
+  scene.actions = getSceneSpeakableActionsForTTS(scene, providerId);
   const speechActions = scene.actions.filter(
     (a): a is SpeechAction => a.type === 'speech' && !!a.text,
   );

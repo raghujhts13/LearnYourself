@@ -1,4 +1,4 @@
-# LYS
+# LearnYourself (LYS)
 
 **AI-assisted, local-first e-learning authoring and classroom delivery platform.**
 

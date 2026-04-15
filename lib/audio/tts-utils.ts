@@ -4,6 +4,7 @@
 
 import type { TTSProviderId } from './types';
 import type { Action, SpeechAction } from '@/lib/types/action';
+import type { Scene } from '@/lib/types/stage';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('TTS');
@@ -12,6 +13,82 @@ const log = createLogger('TTS');
 export const TTS_MAX_TEXT_LENGTH: Partial<Record<TTSProviderId, number>> = {
   'glm-tts': 1024,
 };
+
+/**
+ * Resolve the scene-level speakable script.
+ * Priority:
+ * 1) Trimmed non-empty scene.speakerNotes
+ * 2) Concatenated speech action text (legacy fallback)
+ */
+export function getSceneSpeakableScript(scene: Scene | null): string {
+  if (!scene) return '';
+
+  const notes = scene.speakerNotes?.trim();
+  if (notes) return notes;
+
+  const speechText = (scene.actions || [])
+    .filter((a): a is SpeechAction => a.type === 'speech')
+    .map((a) => a.text.trim())
+    .filter(Boolean)
+    .join('\n\n');
+
+  return speechText;
+}
+
+/**
+ * Build effective actions for speaking a scene.
+ * - When trimmed speakerNotes exists: replace all speech actions with one speech action
+ *   carrying the notes script (non-speech actions are preserved in order).
+ * - When notes are empty/whitespace: keep original actions unchanged.
+ */
+export function getSceneSpeakableActions(scene: Scene | null): Action[] {
+  if (!scene) return [];
+
+  const actions = scene.actions || [];
+  const script = scene.speakerNotes?.trim();
+  if (!script) return actions;
+
+  const firstSpeech = actions.find((a): a is SpeechAction => a.type === 'speech');
+  const { audioId: _audioId, audioUrl: _audioUrl, ...baseSpeech } = firstSpeech || {
+    id: `${scene.id}_speaker_notes`,
+    type: 'speech' as const,
+    text: '',
+  };
+
+  const notesSpeechAction: SpeechAction = {
+    ...baseSpeech,
+    type: 'speech',
+    text: script,
+  };
+
+  let inserted = false;
+  const nextActions: Action[] = [];
+
+  for (const action of actions) {
+    if (action.type === 'speech') {
+      if (!inserted) {
+        nextActions.push(notesSpeechAction);
+        inserted = true;
+      }
+      continue;
+    }
+    nextActions.push(action);
+  }
+
+  if (!inserted) {
+    nextActions.unshift(notesSpeechAction);
+  }
+
+  return nextActions;
+}
+
+/**
+ * Build speakable actions and apply provider-aware speech chunking.
+ */
+export function getSceneSpeakableActionsForTTS(scene: Scene, providerId: TTSProviderId): Action[] {
+  const effectiveActions = getSceneSpeakableActions(scene);
+  return splitLongSpeechActions(effectiveActions, providerId);
+}
 
 /**
  * Split long text into chunks that respect sentence boundaries.
