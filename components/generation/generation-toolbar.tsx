@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useMemo } from 'react';
-import { Bot, Check, ChevronLeft, Paperclip, FileText, X, Globe2 } from 'lucide-react';
+import { Bot, Check, ChevronLeft, Paperclip, FileText, X, Globe2, Plus } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
@@ -53,9 +53,9 @@ export interface GenerationToolbarProps {
   webSearch: boolean;
   onWebSearchChange: (v: boolean) => void;
   onSettingsOpen: (section?: SettingsSection) => void;
-  // Document upload (PDF, DOCX, TXT, PPT, PPTX)
-  pdfFile: File | null;
-  onPdfFileChange: (file: File | null) => void;
+  // Document upload — multi-file (PDF, DOCX, TXT, PPT, PPTX)
+  pdfFiles: File[];
+  onPdfFilesChange: (files: File[]) => void;
   onPdfError: (error: string | null) => void;
   // Quiz toggle
   includeQuizzes?: boolean;
@@ -72,8 +72,8 @@ export function GenerationToolbar({
   webSearch,
   onWebSearchChange,
   onSettingsOpen,
-  pdfFile,
-  onPdfFileChange,
+  pdfFiles,
+  onPdfFilesChange,
   onPdfError,
   includeQuizzes = false,
   onIncludeQuizzesChange,
@@ -139,11 +139,11 @@ export function GenerationToolbar({
 
   const currentProviderConfig = providersConfig?.[currentProviderId];
 
-  // Document handler (supports PDF, DOCX, TXT, PPT, PPTX)
+  // Document handler — validates a single file, appends to list if valid
   const handleFileSelect = (file: File) => {
     let validTypes: string[] = [];
     let validExtensions: string[] = [];
-    
+
     if (parserMode === 'unpdf') {
       validTypes = ['application/pdf'];
       validExtensions = ['pdf'];
@@ -167,20 +167,33 @@ export function GenerationToolbar({
     }
 
     const ext = file.name.toLowerCase().split('.').pop();
-    
     if (!validTypes.includes(file.type) && !validExtensions.includes(ext || '')) {
       if (parserMode === 'unpdf') onPdfError('Please upload a PDF file');
       else if (parserMode === 'mineru') onPdfError('Please upload PDF, DOCX, TXT, PPT, or PPTX');
       else onPdfError('Please upload DOCX, TXT, PPT, or PPTX');
       return;
     }
-    
     if (file.size > MAX_PDF_SIZE_BYTES) {
       onPdfError(t('upload.fileTooLarge'));
       return;
     }
+    // Prevent duplicate file names
+    if (pdfFiles.some((f) => f.name === file.name && f.size === file.size)) {
+      onPdfError(`"${file.name}" is already added.`);
+      return;
+    }
     onPdfError(null);
-    onPdfFileChange(file);
+    onPdfFilesChange([...pdfFiles, file]);
+  };
+
+  const handleRemoveFile = (index: number) => {
+    onPdfFilesChange(pdfFiles.filter((_, i) => i !== index));
+  };
+
+  const handleDropFiles = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    Array.from(e.dataTransfer.files).forEach((f) => handleFileSelect(f));
   };
 
   // ─── Pill button helper ─────────────────────────────
@@ -223,19 +236,23 @@ export function GenerationToolbar({
       {/* ── Separator ── */}
       <div className="w-px h-4 bg-border/60 mx-1" />
 
-      {/* ── Document Upload (PDF, DOCX, TXT, PPT, PPTX) ── */}
+      {/* ── Document Upload (multi-file: PDF, DOCX, TXT, PPT, PPTX) ── */}
       <Popover>
         <PopoverTrigger asChild>
-          {pdfFile ? (
+          {pdfFiles.length > 0 ? (
             <button className={pillActive}>
               <Paperclip className="size-3.5" />
-              <span className="max-w-[100px] truncate">{pdfFile.name}</span>
+              {pdfFiles.length === 1 ? (
+                <span className="max-w-[100px] truncate">{pdfFiles[0].name}</span>
+              ) : (
+                <span>{pdfFiles.length} files</span>
+              )}
               <span
                 role="button"
                 className="size-4 rounded-full inline-flex items-center justify-center hover:bg-violet-200 dark:hover:bg-violet-800 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onPdfFileChange(null);
+                  onPdfFilesChange([]);
                 }}
               >
                 <X className="size-2.5" />
@@ -247,17 +264,15 @@ export function GenerationToolbar({
             </button>
           )}
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-72 p-0">
-          {/* Parser selector (PDF only - other formats use built-in parsers) */}
-          <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+        <PopoverContent align="start" className="w-80 p-0">
+          {/* Parser selector */}
+          <div className="flex items-center gap-2 px-3 pt-3 pb-2 border-b border-border/50">
             <span className="text-xs font-medium text-muted-foreground shrink-0">
               {t('toolbar.documentParser')}
             </span>
             <Select value={parserMode} onValueChange={(v) => {
               setParserMode(v);
-              if (v !== 'others') {
-                setPDFProvider(v as PDFProviderId);
-              }
+              if (v !== 'others') setPDFProvider(v as PDFProviderId);
             }}>
               <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
                 <SelectValue />
@@ -284,82 +299,84 @@ export function GenerationToolbar({
                   );
                 })}
                 <SelectItem value="others">
-                  <div className="flex items-center gap-1.5">
-                    Others (DOCX, PPT, TXT)
-                  </div>
+                  <div className="flex items-center gap-1.5">Others (DOCX, PPT, TXT)</div>
                 </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Upload area / file info */}
+          {/* File list */}
+          <div className="px-3 py-2 space-y-1 max-h-44 overflow-y-auto">
+            {pdfFiles.map((file, idx) => (
+              <div key={`${file.name}-${idx}`} className="flex items-center gap-2 group">
+                <div className="size-7 rounded-md bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
+                  <FileText className="size-3.5 text-violet-600 dark:text-violet-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium truncate">{file.name}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {(file.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleRemoveFile(idx)}
+                  className="shrink-0 size-5 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
+                  title="Remove"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Drop zone / add button */}
           <div className="px-3 pb-3">
             <input
               type="file"
               ref={fileInputRef}
               className="hidden"
+              multiple
               accept={
                 parserMode === 'unpdf' ? '.pdf' :
                 parserMode === 'mineru' ? '.pdf,.docx,.txt,.ppt,.pptx' :
                 '.docx,.txt,.ppt,.pptx'
               }
               onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFileSelect(f);
+                Array.from(e.target.files ?? []).forEach((f) => handleFileSelect(f));
                 e.target.value = '';
               }}
             />
-            {pdfFile ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="size-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
-                    <FileText className="size-4 text-violet-600 dark:text-violet-400" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{pdfFile.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {(pdfFile.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => onPdfFileChange(null)}
-                  className="w-full text-xs text-destructive hover:underline text-left"
-                >
-                  {t('toolbar.removeDocument')}
-                </button>
-              </div>
-            ) : (
-              <div
-                className={cn(
-                  'flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 transition-colors cursor-pointer',
-                  isDragging
-                    ? 'border-violet-400 bg-violet-50 dark:bg-violet-950/20'
-                    : 'border-muted-foreground/20 hover:border-violet-300',
-                )}
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setIsDragging(false);
-                  const f = e.dataTransfer.files?.[0];
-                  if (f) handleFileSelect(f);
-                }}
+            <div
+              className={cn(
+                'flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-3 transition-colors cursor-pointer mt-1',
+                isDragging
+                  ? 'border-violet-400 bg-violet-50 dark:bg-violet-950/20'
+                  : 'border-muted-foreground/20 hover:border-violet-300',
+              )}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDropFiles}
+            >
+              <Plus className="size-4 text-muted-foreground/50 mb-1" />
+              <p className="text-xs font-medium">
+                {pdfFiles.length > 0 ? 'Add more files' : t('toolbar.documentUpload')}
+              </p>
+              <p className="text-[10px] text-muted-foreground/60 mt-0.5 text-center">
+                {parserMode === 'unpdf'
+                  ? 'PDF up to 50 MB each'
+                  : parserMode === 'mineru'
+                  ? 'PDF, DOCX, TXT, PPT, PPTX · 50 MB each'
+                  : 'DOCX, TXT, PPT, PPTX · 50 MB each'}
+              </p>
+            </div>
+            {pdfFiles.length > 0 && (
+              <button
+                onClick={() => onPdfFilesChange([])}
+                className="w-full mt-2 text-[10px] text-destructive hover:underline text-center"
               >
-                <Paperclip className="size-5 text-muted-foreground/50 mb-1.5" />
-                <p className="text-xs font-medium">{t('toolbar.documentUpload')}</p>
-                <p className="text-[10px] text-muted-foreground/60 mt-0.5 text-center px-2">
-                  {parserMode === 'unpdf'
-                    ? 'Supports PDF up to 50MB'
-                    : parserMode === 'mineru'
-                    ? 'Supports PDF, DOCX, TXT, PPT, PPTX up to 50MB'
-                    : 'Supports DOCX, TXT, PPT, PPTX up to 50MB'}
-                </p>
-              </div>
+                Remove all files
+              </button>
             )}
           </div>
         </PopoverContent>
@@ -500,7 +517,7 @@ export function GenerationToolbar({
       )}
 
       {/* ── Generation Mode Toggle ── */}
-      {onGenerationModeChange && pdfFile && (
+      {onGenerationModeChange && pdfFiles.length > 0 && (
         <Popover>
           <PopoverTrigger asChild>
             <button className={generationMode === 'from-slides' ? pillActive : pillMuted}>

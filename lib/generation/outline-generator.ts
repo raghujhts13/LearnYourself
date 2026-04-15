@@ -19,6 +19,20 @@ import type { AICallFn, GenerationResult, GenerationCallbacks } from './pipeline
 import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
 
+export function applyQuizPreferenceToOutlines(
+  outlines: SceneOutline[],
+  includeQuizzes: boolean,
+): SceneOutline[] {
+  const preferred = includeQuizzes
+    ? outlines
+    : outlines.filter((outline) => outline.type !== 'quiz');
+
+  return preferred.map((outline, index) => ({
+    ...outline,
+    order: index + 1,
+  }));
+}
+
 /**
  * Generate scene outlines from user requirements
  * Now uses simplified UserRequirements with just requirement text and language
@@ -38,6 +52,8 @@ export async function generateSceneOutlinesFromRequirements(
     teacherContext?: string;
   },
 ): Promise<GenerationResult<SceneOutline[]>> {
+  const includeQuizzes = requirements.includeQuizzes === true;
+
   // Build available images description for the prompt
   let availableImagesText =
     requirements.language === 'zh-CN' ? '无可用图片' : 'No images available';
@@ -94,6 +110,10 @@ export async function generateSceneOutlinesFromRequirements(
       '**IMPORTANT: Do NOT include any video mediaGenerations (type: "video") in the outlines. Video generation is disabled. Image generation is allowed.**';
   }
 
+  const quizGenerationPolicy = includeQuizzes
+    ? '**Quiz scenes are enabled. You may include quiz outlines where pedagogically appropriate.**'
+    : '**IMPORTANT: Quiz scenes are disabled. Do NOT generate any scene with type "quiz" and do NOT include quizConfig. Use only non-quiz scene types.**';
+
   // Use simplified prompt variables
   const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
     // New simplified variables
@@ -107,6 +127,7 @@ export async function generateSceneOutlinesFromRequirements(
     availableImages: availableImagesText,
     userProfile: userProfileText,
     mediaGenerationPolicy,
+    quizGenerationPolicy,
     researchContext:
       options?.researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
     // Server-side generation populates this via options; client-side populates via formatTeacherPersonaForPrompt
@@ -146,17 +167,18 @@ export async function generateSceneOutlinesFromRequirements(
 
     // Replace sequential gen_img_N/gen_vid_N with globally unique IDs
     const result = uniquifyMediaElementIds(enriched);
+    const quizFilteredResult = applyQuizPreferenceToOutlines(result, includeQuizzes);
 
     callbacks?.onProgress?.({
       currentStage: 1,
       overallProgress: 50,
       stageProgress: 100,
-      statusMessage: `已生成 ${result.length} 个场景大纲`,
+      statusMessage: `已生成 ${quizFilteredResult.length} 个场景大纲`,
       scenesGenerated: 0,
-      totalScenes: result.length,
+      totalScenes: quizFilteredResult.length,
     });
 
-    return { success: true, data: result };
+    return { success: true, data: quizFilteredResult };
   } catch (error) {
     return { success: false, error: String(error) };
   }

@@ -18,6 +18,7 @@ import type { EngineMode, Effect } from '@/lib/playback';
 import { ActionEngine } from '@/lib/action/engine';
 import { createAudioPlayer } from '@/lib/utils/audio-player';
 import type { Action, SpeechAction } from '@/lib/types/action';
+import { getSceneSpeakableActions } from '@/lib/audio/tts-utils';
 import { cn } from '@/lib/utils';
 import { ProfessorBar } from '@/components/professor-bar';
 import { savePlaybackState, loadPlaybackState, clearPlaybackState } from '@/lib/utils/playback-storage';
@@ -206,7 +207,9 @@ export function Stage({
   useEffect(() => {
     resetSceneState();
 
-    if (!currentScene || !currentScene.actions || currentScene.actions.length === 0) {
+    const speakableActions = getSceneSpeakableActions(currentScene);
+
+    if (!currentScene || speakableActions.length === 0) {
       engineRef.current = null;
       setEngineMode('idle');
       return;
@@ -217,8 +220,12 @@ export function Stage({
     }
 
     const actionEngine = new ActionEngine(useStageStore, audioPlayerRef.current);
+    const speakableScene = {
+      ...currentScene,
+      actions: speakableActions,
+    };
 
-    const engine = new PlaybackEngine([currentScene], actionEngine, audioPlayerRef.current, {
+    const engine = new PlaybackEngine([speakableScene], actionEngine, audioPlayerRef.current, {
       onModeChange: (mode) => {
         setEngineMode(mode);
         // Save position when pausing or completing
@@ -286,7 +293,7 @@ export function Stage({
       currentScene.type === 'quiz' ||
       currentScene.type === 'pbl';
 
-    const hasSpeechActions = currentScene.actions.some((a: Action) => a.type === 'speech');
+    const hasSpeechActions = speakableActions.some((a: Action) => a.type === 'speech');
     const shouldAutoNarrateInteractiveScene = isInteractiveScene && hasSpeechActions;
 
     if ((autoStartRef.current && !isInteractiveScene) || shouldAutoNarrateInteractiveScene) {
@@ -330,7 +337,7 @@ export function Stage({
 
   // First speech text for idle display
   const firstSpeechText = useMemo(
-    () => currentScene?.actions?.find((a): a is SpeechAction => a.type === 'speech')?.text ?? null,
+    () => getSceneSpeakableActions(currentScene).find((a): a is SpeechAction => a.type === 'speech')?.text ?? null,
     [currentScene],
   );
 

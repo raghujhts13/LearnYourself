@@ -22,6 +22,7 @@ import {
 } from '@/lib/generation/generation-pipeline';
 import { MAX_PDF_CONTENT_CHARS, MAX_VISION_IMAGES } from '@/lib/constants/generation';
 import { nanoid } from 'nanoid';
+import { applyQuizPreferenceToOutlines } from '@/lib/generation/outline-generator';
 import type {
   UserRequirements,
   PdfImage,
@@ -115,6 +116,7 @@ export async function POST(req: NextRequest) {
       imageMapping?: ImageMapping;
       researchContext?: string;
     };
+    const includeQuizzes = requirements.includeQuizzes === true;
     requirementSnippet = requirements?.requirement?.substring(0, 60);
 
     // Detect vision capability
@@ -170,6 +172,10 @@ export async function POST(req: NextRequest) {
         '**IMPORTANT: Do NOT include any video mediaGenerations (type: "video") in the outlines. Video generation is disabled. Image generation is allowed.**';
     }
 
+    const quizGenerationPolicy = includeQuizzes
+      ? '**Quiz scenes are enabled. You may include quiz outlines where pedagogically appropriate.**'
+      : '**IMPORTANT: Quiz scenes are disabled. Do NOT generate any scene with type "quiz" and do NOT include quizConfig. Use only non-quiz scene types.**';
+
     const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
       requirement: requirements.requirement,
       language: requirements.language,
@@ -181,6 +187,7 @@ export async function POST(req: NextRequest) {
       availableImages: availableImagesText,
       researchContext: researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
       mediaGenerationPolicy,
+      quizGenerationPolicy,
       teacherContext: '',
     });
 
@@ -241,6 +248,7 @@ export async function POST(req: NextRequest) {
               };
 
           let parsedOutlines: SceneOutline[] = [];
+          let emittedOutlines: SceneOutline[] = [];
           let lastError: string | undefined;
 
           for (let attempt = 1; attempt <= MAX_STREAM_RETRIES + 1; attempt++) {
@@ -249,6 +257,7 @@ export async function POST(req: NextRequest) {
 
               let fullText = '';
               parsedOutlines = [];
+              emittedOutlines = [];
 
               for await (const chunk of result.textStream) {
                 fullText += chunk;
@@ -264,17 +273,28 @@ export async function POST(req: NextRequest) {
                   };
                   parsedOutlines.push(enriched);
 
+                  if (!includeQuizzes && enriched.type === 'quiz') {
+                    continue;
+                  }
+
+                  const emitted = {
+                    ...enriched,
+                    order: emittedOutlines.length + 1,
+                  };
+                  emittedOutlines.push(emitted);
+
                   const event = JSON.stringify({
                     type: 'outline',
-                    data: enriched,
-                    index: parsedOutlines.length - 1,
+                    data: emitted,
+                    index: emittedOutlines.length - 1,
                   });
                   controller.enqueue(encoder.encode(`data: ${event}\n\n`));
                 }
               }
 
               // Validate: got outlines?
-              if (parsedOutlines.length > 0) break;
+              const preferredOutlines = applyQuizPreferenceToOutlines(parsedOutlines, includeQuizzes);
+              if (preferredOutlines.length > 0) break;
 
               // Empty result — retry if we have attempts left
               lastError = fullText.trim()
@@ -312,9 +332,11 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          if (parsedOutlines.length > 0) {
+          const preferredOutlines = applyQuizPreferenceToOutlines(parsedOutlines, includeQuizzes);
+
+          if (preferredOutlines.length > 0) {
             // Replace sequential gen_img_N/gen_vid_N with globally unique IDs
-            const uniquifiedOutlines = uniquifyMediaElementIds(parsedOutlines);
+            const uniquifiedOutlines = uniquifyMediaElementIds(preferredOutlines);
             // Send done event with all outlines
             const doneEvent = JSON.stringify({
               type: 'done',

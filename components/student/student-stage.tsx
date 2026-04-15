@@ -13,6 +13,7 @@ import type { EngineMode, Effect } from '@/lib/playback';
 import { ActionEngine } from '@/lib/action/engine';
 import { createAudioPlayer } from '@/lib/utils/audio-player';
 import type { SpeechAction } from '@/lib/types/action';
+import { getSceneSpeakableActions } from '@/lib/audio/tts-utils';
 import { cn } from '@/lib/utils';
 import { ProfessorBar } from '@/components/professor-bar';
 
@@ -136,7 +137,9 @@ export function StudentStage() {
   useEffect(() => {
     resetSceneState();
 
-    if (!currentScene?.actions?.length) {
+    const speakableActions = getSceneSpeakableActions(currentScene);
+
+    if (!currentScene || speakableActions.length === 0) {
       engineRef.current = null;
       setEngineMode('idle');
       return;
@@ -145,7 +148,11 @@ export function StudentStage() {
     engineRef.current?.stop();
 
     const actionEngine = new ActionEngine(useStageStore, audioPlayerRef.current);
-    const engine = new PlaybackEngine([currentScene], actionEngine, audioPlayerRef.current, {
+    const speakableScene = {
+      ...currentScene,
+      actions: speakableActions,
+    };
+    const engine = new PlaybackEngine([speakableScene], actionEngine, audioPlayerRef.current, {
       onModeChange: (m) => setEngineMode(m),
       onSceneChange: () => {},
       onSpeechStart: (text) => setLectureSpeech(text),
@@ -304,7 +311,7 @@ export function StudentStage() {
   // ── Derived state ─────────────────────────────────────────────────────────
 
   const firstSpeechText = useMemo(
-    () => currentScene?.actions?.find((a): a is SpeechAction => a.type === 'speech')?.text ?? null,
+    () => getSceneSpeakableActions(currentScene).find((a): a is SpeechAction => a.type === 'speech')?.text ?? null,
     [currentScene],
   );
 

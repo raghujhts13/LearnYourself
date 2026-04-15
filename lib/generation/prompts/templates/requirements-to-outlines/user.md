@@ -79,4 +79,6 @@ Then output a JSON array containing all scene outlines. Each scene must include:
 
 {{mediaGenerationPolicy}}
 
+{{quizGenerationPolicy}}
+
 Please output JSON array directly without additional explanatory text.

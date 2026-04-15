@@ -33,6 +33,10 @@ export async function resolveModel(params: {
   const modelString = params.modelString || process.env.DEFAULT_MODEL || 'gpt-4o-mini';
   const { providerId, modelId } = parseModelString(modelString);
 
+  if (!modelId?.trim()) {
+    throw new Error(`Invalid model selection: "${modelString}"`);
+  }
+
   // SSRF validation applies only to client-supplied base URLs.
   // Server-configured URLs (e.g. OLLAMA_BASE_URL from env/YAML) flow through
   // resolveBaseUrl() and bypass this check — they're trusted by the operator.

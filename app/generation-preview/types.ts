@@ -6,6 +6,17 @@ import type {
   ImageMapping,
 } from '@/lib/types/generation';
 
+/**
+ * One uploaded source file in a multi-file generation session.
+ */
+export interface SourceFileEntry {
+  storageKey: string;
+  fileName: string;
+  fileSize?: number;
+  providerId?: string;
+  providerConfig?: { apiKey?: string; baseUrl?: string };
+}
+
 // Session state stored in sessionStorage
 export interface GenerationSessionState {
   sessionId: string;
@@ -16,7 +27,9 @@ export interface GenerationSessionState {
   imageMapping?: ImageMapping;
   sceneOutlines?: SceneOutline[] | null;
   currentStep: 'generating' | 'complete';
-  // PDF deferred parsing fields
+  // ── Multi-file source files (new) ──
+  sourceFiles?: SourceFileEntry[];
+  // ── Legacy single-file fields (kept for backward compat + ClassroomFilesPanel) ──
   pdfStorageKey?: string;
   pdfFileName?: string;
   pdfProviderId?: string;
@@ -76,7 +89,8 @@ export const ALL_STEPS: GenerationStep[] = [
 
 export const getActiveSteps = (session: GenerationSessionState | null) => {
   return ALL_STEPS.filter((step) => {
-    if (step.id === 'pdf-analysis') return !!session?.pdfStorageKey;
+    if (step.id === 'pdf-analysis')
+      return !!(session?.sourceFiles?.length || session?.pdfStorageKey);
     if (step.id === 'web-search') return !!session?.requirements?.webSearch;
     return true;
   });

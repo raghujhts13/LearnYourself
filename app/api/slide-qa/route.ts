@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       return apiError('MISSING_REQUIRED_FIELD', 400, 'question is required');
     }
 
-    const { model: languageModel } = resolveModelFromHeaders(req);
+    const { model: languageModel } = await resolveModelFromHeaders(req);
 
     const contextBlock = [
       `**Current Slide: "${slideTitle}"**`,
@@ -86,6 +86,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     log.error('Slide Q&A failed:', error);
+    if (error instanceof Error && error.message.includes('Invalid model selection')) {
+      return apiError('INVALID_REQUEST', 400, error.message);
+    }
     return apiError('INTERNAL_ERROR', 500, 'Failed to answer question');
   }
 }

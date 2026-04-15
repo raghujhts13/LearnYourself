@@ -34,7 +34,7 @@ export function CreateClassDialog({
   const router = useRouter();
 
   const [requirement, setRequirement] = useState('');
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
   const [includeQuizzes, setIncludeQuizzes] = useState(false);
   const [generationMode, setGenerationMode] = useState<'ai' | 'from-slides'>('ai');
   const [language, setLanguage] = useState<'zh-CN' | 'en-US'>('en-US');
@@ -62,7 +62,7 @@ export function CreateClassDialog({
   useEffect(() => {
     if (open) {
       setRequirement('');
-      setPdfFile(null);
+      setPdfFiles([]);
       setIncludeQuizzes(false);
       setGenerationMode('ai');
       setError(null);
@@ -93,15 +93,17 @@ export function CreateClassDialog({
     }
 
     // Validate PPT/PPTX when "Use My Slides" mode is selected
-    if (generationMode === 'from-slides' && pdfFile) {
-      const ext = pdfFile.name.toLowerCase().split('.').pop();
-      const isPptx =
-        pdfFile.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-        pdfFile.type === 'application/vnd.ms-powerpoint' ||
-        ext === 'ppt' ||
-        ext === 'pptx';
-
-      if (!isPptx) {
+    if (generationMode === 'from-slides') {
+      const hasPptFile = pdfFiles.some((f) => {
+        const ext = f.name.toLowerCase().split('.').pop();
+        return (
+          f.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+          f.type === 'application/vnd.ms-powerpoint' ||
+          ext === 'ppt' ||
+          ext === 'pptx'
+        );
+      });
+      if (pdfFiles.length > 0 && !hasPptFile) {
         setError(t('upload.noPresentationFile'));
         return;
       }
@@ -121,25 +123,29 @@ export function CreateClassDialog({
         generationMode,
       };
 
-      let pdfStorageKey: string | undefined;
-      let pdfFileName: string | undefined;
-      let pdfProviderId: string | undefined;
-      let pdfProviderConfig: { apiKey?: string; baseUrl?: string } | undefined;
+      const settings = useSettingsStore.getState();
+      const pdfProviderId = settings.pdfProviderId;
+      const rawProviderCfg = settings.pdfProvidersConfig?.[settings.pdfProviderId];
+      const pdfProviderConfig = rawProviderCfg
+        ? { apiKey: rawProviderCfg.apiKey, baseUrl: rawProviderCfg.baseUrl }
+        : undefined;
 
-      if (pdfFile) {
-        pdfStorageKey = await storePdfBlob(pdfFile);
-        pdfFileName = pdfFile.name;
-
-        const settings = useSettingsStore.getState();
-        pdfProviderId = settings.pdfProviderId;
-        const providerCfg = settings.pdfProvidersConfig?.[settings.pdfProviderId];
-        if (providerCfg) {
-          pdfProviderConfig = {
-            apiKey: providerCfg.apiKey,
-            baseUrl: providerCfg.baseUrl,
+      // Store all files to IndexedDB and build sourceFiles array
+      const sourceFiles = await Promise.all(
+        pdfFiles.map(async (file) => {
+          const storageKey = await storePdfBlob(file);
+          return {
+            storageKey,
+            fileName: file.name,
+            fileSize: file.size,
+            providerId: pdfProviderId,
+            providerConfig: pdfProviderConfig,
           };
-        }
-      }
+        }),
+      );
+
+      // Legacy single-file fields — point to the first file for backward compat
+      const firstFile = sourceFiles[0];
 
       const sessionState = {
         sessionId: nanoid(),
@@ -147,10 +153,13 @@ export function CreateClassDialog({
         pdfText: '',
         pdfImages: [],
         imageStorageIds: [],
-        pdfStorageKey,
-        pdfFileName,
-        pdfProviderId,
-        pdfProviderConfig,
+        // Multi-file
+        sourceFiles: sourceFiles.length > 0 ? sourceFiles : undefined,
+        // Legacy (used by ClassroomFilesPanel and from-slides mode)
+        pdfStorageKey: firstFile?.storageKey,
+        pdfFileName: firstFile?.fileName,
+        pdfProviderId: firstFile?.providerId,
+        pdfProviderConfig: firstFile?.providerConfig,
         sceneOutlines: null,
         currentStep: 'generating' as const,
         classroomId: selectedClassroomId,
@@ -168,12 +177,13 @@ export function CreateClassDialog({
   if (!open) return null;
 
   const isPptRequired = generationMode === 'from-slides';
-  const hasPptFile =
-    pdfFile &&
-    (pdfFile.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-      pdfFile.type === 'application/vnd.ms-powerpoint' ||
-      pdfFile.name.toLowerCase().endsWith('.ppt') ||
-      pdfFile.name.toLowerCase().endsWith('.pptx'));
+  const hasPptFile = pdfFiles.some(
+    (f) =>
+      f.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+      f.type === 'application/vnd.ms-powerpoint' ||
+      f.name.toLowerCase().endsWith('.ppt') ||
+      f.name.toLowerCase().endsWith('.pptx'),
+  );
 
   return (
     <>
@@ -262,8 +272,8 @@ export function CreateClassDialog({
                     setSettingsSection(section);
                     setSettingsOpen(true);
                   }}
-                  pdfFile={pdfFile}
-                  onPdfFileChange={setPdfFile}
+                  pdfFiles={pdfFiles}
+                  onPdfFilesChange={setPdfFiles}
                   onPdfError={setError}
                   includeQuizzes={includeQuizzes}
                   onIncludeQuizzesChange={setIncludeQuizzes}
@@ -277,7 +287,7 @@ export function CreateClassDialog({
             </div>
 
             {/* PPT warning when from-slides but no PPT file */}
-            {isPptRequired && pdfFile && !hasPptFile && (
+            {isPptRequired && pdfFiles.length > 0 && !hasPptFile && (
               <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                 <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-800 dark:text-amber-200">
@@ -305,7 +315,7 @@ export function CreateClassDialog({
             </button>
             <button
               onClick={handleSubmit}
-              disabled={!requirement.trim() || (isPptRequired && !!pdfFile && !hasPptFile)}
+              disabled={!requirement.trim() || (isPptRequired && pdfFiles.length > 0 && !hasPptFile)}
               className="flex-1 px-4 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium transition-colors"
             >
               {t('classroom.startGeneration')}

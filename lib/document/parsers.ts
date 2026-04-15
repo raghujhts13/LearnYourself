@@ -5,7 +5,7 @@
  */
 
 import { createLogger } from '@/lib/logger';
-import type { ParsedDocumentContent, DocumentParserConfig } from './types';
+import type { ParsedDocumentContent, DocumentParserConfig, DocumentType } from './types';
 
 const log = createLogger('DocumentParsers');
 

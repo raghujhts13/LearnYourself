@@ -28,7 +28,7 @@ export function JournalFAB() {
           onClick={toggle}
           title="My Journal"
           aria-label="Open journal"
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/30 hover:shadow-violet-500/50 transition-shadow"
+          className="fixed bottom-4 left-16 z-50 flex items-center gap-2 px-4 py-3 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/30 hover:shadow-violet-500/50 transition-shadow"
         >
           <BookOpen className="w-4 h-4" />
           <span className="text-sm font-semibold pr-0.5">Journal</span>

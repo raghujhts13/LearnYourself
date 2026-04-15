@@ -44,7 +44,7 @@ export function validateModel(
   currentModelId: string,
   availableModels: Array<{ id: string }>,
 ): string {
-  if (!currentModelId) return currentModelId;
+  if (!currentModelId) return availableModels[0]?.id ?? '';
   if (availableModels.some((m) => m.id === currentModelId)) return currentModelId;
   return availableModels[0]?.id ?? '';
 }
